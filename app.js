@@ -349,6 +349,7 @@ function render(html) {
 async function titleScreen() {
   AudioLayer.ensure(); AudioLayer.fade(0.0001, 0.1);
   const saved = readSavedRun();
+  const resumeLabel = saved ? `Продолжить · воспоминание ${String((saved.scene || 0) + 1).padStart(2, "0")} / ${String(saved.life.memories.length).padStart(2, "0")}` : "";
   render(`
     <div class="screen title-screen">
       <div class="title-topline"><span>ЦИКЛ / 047</span><span>ПОСЛЕ ЧЕЛОВЕКА</span></div>
@@ -358,7 +359,7 @@ async function titleScreen() {
         <h1 class="title serif"><span class="line">Всё, что от меня</span><span class="ost" data-t="ОСТАЛОСЬ">ОСТАЛОСЬ</span></h1>
         <p class="title-description">Они думали, что после последнего вдоха<br>никто не услышит тишину.</p>
         <div class="start-row">
-          <button class="button primary title-button" data-go="${saved ? "resume" : "choose"}">${saved ? "Продолжить запись" : "Войти в архив"} <span>↗</span></button>
+          <button class="button primary title-button" data-go="${saved ? "resume" : "choose"}">${saved ? resumeLabel : "Войти в архив"} <span>↗</span></button>
           ${saved ? '<button class="button ghost" data-go="choose">Новая запись</button>' : ""}
         </div>
       </div>
@@ -407,15 +408,15 @@ async function memoryScreen(idx) {
     : "";
   render(`
     <div class="memory-stage">
-      <div style="padding: calc(16px + env(safe-area-inset-top)) 20px 0; display:flex; justify-content:space-between">
+      <div style="padding: calc(16px + env(safe-area-inset-top)) 20px 0; display:flex; justify-content:space-between; gap:12px">
         <span class="eyebrow">ВОСПОМИНАНИЕ ${String(idx + 1).padStart(2, '0')} / ${String(total).padStart(2, '0')}</span>
-        <span class="eyebrow">${LIFE.name}</span>
+        <span class="eyebrow memory-name">${LIFE.name}</span>
       </div>
-      <div class="scene">
+      <div class="scene memory-scene">
         <div class="pixel-memory" aria-hidden="true"><canvas class="pixel-background" width="160" height="120"></canvas><canvas class="pixel-actor" width="160" height="120"></canvas></div>
         ${m.fx === "room" ? '<div class="fx phone"></div>' : ""}
         ${idx === 0 ? '<blockquote class="scene-scripture"><span>«Я свет миру; кто последует за Мною, тот не будет ходить во тьме.»</span><cite>Ин. 8:12</cite></blockquote>' : ''}
-        <div class="caption">
+        <div class="memory-content"><div class="caption">
           <div class="yeartag">${m.y}</div>
           <h2 class="serif" id="cap-h"></h2>
           <p id="cap-p"></p>
@@ -426,7 +427,7 @@ async function memoryScreen(idx) {
             const selected = RUN.choices[idx] === c.id;
             return `<button class="button ghost ${selected ? "selected" : ""}" data-choice="${c.id}" data-effect="${c.effect}"${selected ? " disabled" : ""}>${c.label}</button>`;
           }).join("")}</div>
-        </div>` : ""}
+        </div>` : ""}</div>
       </div>
       <div class="bar"><i style="width:${((idx + 1) / total) * 100}%"></i></div>
       <div class="scene-foot">
@@ -519,7 +520,7 @@ function spaceScreen() {
         </div>
         <div class="stick" id="stick" role="group" aria-label="тяга"><i></i></div>
         <div class="keys">
-          <button class="button" id="k-scan">Наблюдать</button>
+          <button class="button" id="k-scan">Сканировать</button>
           <button class="button ghost" id="k-slow">Покой</button>
         </div>
       </div>
@@ -1210,11 +1211,6 @@ void main(){
       const res = space3d ? project(b, B) : drawPlanet(b, B, o);
       if (b === MOON) moonHit = res;
       // приближение к телу: одноразовое системное сообщение
-      if (!state.modal && res && (space3d ? res.ok : true) && it.d < 3 && !state.events[b.name]) {
-        state.events[b.name] = true;
-        if (b === MOON) { eventMoon(); }
-        else { AudioLayer.ping(300, 0.8, 0.06); toast(`<span style="color:var(--cyan)">${b.name}</span><br>${b.line}`); }
-      }
     }
 
     if (space3d) {
@@ -1273,8 +1269,6 @@ void main(){
     if (nearEl) nearEl.textContent = `${nearest.name} · ${nearest.d.toFixed(1)} R`;
 
     // события по мере полёта: теперь относительно Земли в её реальной точке орбиты
-    if (!state.modal && !state.events.earth && dE > 22) { state.events.earth = true; eventEarthFar(); }
-    if (!state.modal && !state.events.far && dS > 700) { state.events.far = true; eventSignal(); }
 
     state.raf = requestAnimationFrame(frame);
   }
@@ -1361,6 +1355,11 @@ void main(){
     }
     const dE = Math.hypot(cam.pos.x - EARTH.x, cam.pos.y - EARTH.y, cam.pos.z - EARTH.z) - EARTH.r;
     const dS = Math.hypot(cam.pos.x, cam.pos.y, cam.pos.z) - SUN.r;
+    const dMoon = Math.hypot(cam.pos.x - MOON.x, cam.pos.y - MOON.y, cam.pos.z - MOON.z) - MOON.r;
+    if (state.modal) return;
+    if (dMoon < 3 && !state.events.moon) { state.events.moon = true; eventMoon(); return; }
+    if (dS > 700 && !state.events.far) { state.events.far = true; eventSignal(); return; }
+    if (dE > 22 && !state.events.earth) { state.events.earth = true; eventEarthFar(); return; }
     let near = { name: "—", d: Infinity };
     for (const b of BODIES) {
       const d = Math.hypot(cam.pos.x - b.x, cam.pos.y - b.y, cam.pos.z - b.z) - b.r;
