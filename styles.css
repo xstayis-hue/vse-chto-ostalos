@@ -354,6 +354,7 @@ button:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
 
 /* Экран выбора записи: тихий архивный список без сетки карточек. */
 .archive-list { width: min(420px, 100%); max-height: 100%; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 18px; padding: 28px 24px 22px; color: #9fb0a9; }
+.meta-progress { border: 1px solid rgba(201,168,106,.18); padding: 8px 10px; color: var(--amber); font: 9px "Courier New", monospace; letter-spacing: .08em; line-height: 1.6; }
 .compact-navigation { display: none; }
 @media (max-width: 520px), (min-width: 700px) {
   .panel .compact-navigation { display: block; }

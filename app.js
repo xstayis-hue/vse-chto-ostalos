@@ -171,6 +171,32 @@ const authoredLives = window.CURATED_LIVES || [];
 const lifePool = authoredLives.length ? authoredLives : generatedLifePool;
 const RUN = { choices: {}, signals: [], memories: new Set(), expeditions: [] };
 const RUN_KEY = "vse-chto-ostalos:last-run";
+const META_KEY = "vse-chto-ostalos:archive";
+const EXPEDITION_IDS = ["moon-back", "dead-station", "echo-orbit"];
+function readMeta() {
+  try {
+    const meta = JSON.parse(localStorage.getItem(META_KEY) || "null");
+    return {
+      lives: Number(meta?.lives) || 0,
+      expeditions: Array.isArray(meta?.expeditions) ? meta.expeditions : [],
+      fragments: Number(meta?.fragments) || 0,
+    };
+  } catch { return { lives: 0, expeditions: [], fragments: 0 }; }
+}
+function writeMeta(meta) {
+  try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch { /* archive is optional */ }
+}
+function archivePercent(meta = readMeta()) {
+  return Math.round(((meta.expeditions.length / EXPEDITION_IDS.length) * 45) + Math.min(55, meta.fragments));
+}
+function completeMetaRun() {
+  const meta = readMeta();
+  meta.lives += 1;
+  meta.fragments += Math.min(6, RUN.memories.size);
+  RUN.expeditions.forEach((id) => { if (!meta.expeditions.includes(id)) meta.expeditions.push(id); });
+  writeMeta(meta);
+  return meta;
+}
 function persistRun(status = "active") {
   try {
     localStorage.setItem(RUN_KEY, JSON.stringify({
@@ -211,8 +237,11 @@ function clearSavedRun() {
 }
 function hasMemory(...effects) { return effects.some((effect) => RUN.memories.has(effect)); }
 function runSummary() {
+  const meta = readMeta();
   return {
     retained: RUN.memories.size,
+    expeditions: RUN.expeditions.length,
+    archivePercent: archivePercent(meta),
     choseReturn: RUN.memories.has("earth"),
     choseDistance: RUN.memories.has("distance"),
     answered: RUN.memories.has("voice"),
@@ -221,15 +250,17 @@ function runSummary() {
 function resultText() {
   const summary = runSummary();
   const branch = signalBranch();
-  return `Я прожил жизнь ${LIFE.name} в «Всё, что от меня ОСТАЛОСЬ». В памяти осталось: ${summary.retained} фрагм. Ветка сигнала: ${branch}.`;
+  return `Я прожил жизнь ${LIFE.name} в «Всё, что от меня ОСТАЛОСЬ». В памяти осталось: ${summary.retained} фрагм. Экспедиций: ${summary.expeditions}. Архив восстановлен на ${summary.archivePercent}%. Ветка сигнала: ${branch}.`;
 }
 function resultCardData() {
   const summary = runSummary();
+  const meta = readMeta();
   return {
     name: LIFE.name,
     symbol: LIFE.symbol || "след не определён",
     branch: signalBranch(),
     retained: summary.retained,
+    archive: archivePercent(meta),
     choices: Object.values(RUN.choices).join(" · ") || "—",
   };
 }
@@ -245,7 +276,7 @@ function drawResultCard() {
   ctx.fillStyle = "#9fb4aa"; ctx.font = "bold 70px Arial"; ctx.fillText("ОСТАЛОСЬ", 80, 290);
   ctx.fillStyle = "#9fb4aa"; ctx.font = "28px monospace"; ctx.fillText(data.name, 80, 390);
   ctx.fillStyle = "#71847b"; ctx.font = "22px monospace"; ctx.fillText(`${data.symbol} · ${data.retained} фрагм.`, 80, 440);
-  ctx.fillText(data.branch, 80, 490);
+  ctx.fillText(`${data.branch} · АРХИВ ${data.archive}%`, 80, 490);
   ctx.fillStyle = "#536b62"; ctx.font = "18px monospace"; ctx.fillText("ЗАПИСЬ НЕ ПРИНАДЛЕЖИТ НИКОМУ", 80, 550);
   return canvas;
 }
@@ -337,10 +368,12 @@ async function titleScreen() {
 
 async function chooseScreen() {
   const current = LIFE;
+  const meta = readMeta();
   render(`
     <div class="screen archive-screen">
       <div class="archive-list">
- <div class="archive-header"><span>АРХИВ · 01</span><span>● СВЯЗЬ</span></div>
+         <div class="archive-header"><span>АРХИВ · 01</span><span>● СВЯЗЬ</span></div>
+         <div class="meta-progress">ПРОЖИТО ЖИЗНЕЙ: ${meta.lives} · ЭКСПЕДИЦИЙ: ${meta.expeditions.length}/${EXPEDITION_IDS.length} · ПАМЯТЬ: ${archivePercent(meta)}%</div>
         <div class="archive-title serif">Кем ты был<br><i>до тишины?</i></div>
         <div class="archive-hint">пять записей. одна из них — ты.</div>
         <ol class="archive-items">
@@ -1410,6 +1443,7 @@ void main(){
     Haptics.notification("success");
     state.dead = true; cancelAnimationFrame(state.raf);
     flashOn();
+    const meta = completeMetaRun();
     const summary = runSummary();
     persistRun("complete");
     const retained = summary.retained;
@@ -1429,7 +1463,7 @@ void main(){
           <h1 class="serif">Всё, что от меня<span class="ost">ОСТАЛОСЬ</span></h1>
           <div class="system">${endingTitle}</div>
           <p class="faint" style="max-width:420px;margin:14px auto 0">${endingText}</p>
-          <div class="result-card"><span>ОТПЕЧАТОК ПРОХОЖДЕНИЯ</span><b>${LIFE.name}</b><small>${LIFE.symbol || "след не определён"} · ${choiceText} · ${retained} фрагм.</small></div>
+          <div class="result-card"><span>ОТПЕЧАТОК ПРОХОЖДЕНИЯ</span><b>${LIFE.name}</b><small>${LIFE.symbol || "след не определён"} · ${choiceText} · ${retained} фрагм.</small><small>ОБЩИЙ АРХИВ: ${archivePercent(meta)}% · ЖИЗНЕЙ: ${meta.lives} · ЭКСПЕДИЦИЙ: ${meta.expeditions.length}/${EXPEDITION_IDS.length}</small></div>
           <div class="row center">
             <button class="button primary" data-go="restart">Начать снова</button>
             <button class="button ghost" data-go="title">Закрыть архив</button>
