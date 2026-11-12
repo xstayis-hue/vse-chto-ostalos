@@ -157,10 +157,35 @@ function persistRun(status = "active") {
       status,
       lifeId: LIFE?.id,
       choices: RUN.choices,
+      signals: RUN.signals,
       memories: [...RUN.memories],
+      scene: Number.isInteger(memIdx) ? memIdx : 0,
       savedAt: new Date().toISOString(),
     }));
   } catch { /* приватный режим или отключённое хранилище — не блокируем игру */ }
+}
+function readSavedRun() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(RUN_KEY) || "null");
+    if (!saved || saved.status === "complete") return null;
+    const life = lifePool.find((item) => String(item.id) === String(saved.lifeId));
+    if (!life) return null;
+    return { ...saved, life };
+  } catch { return null; }
+}
+function restoreRun() {
+  const saved = readSavedRun();
+  if (!saved) return false;
+  LIFE = saved.life;
+  RUN.choices = saved.choices || {};
+  RUN.signals = saved.signals || [];
+  RUN.memories = new Set(saved.memories || []);
+  memIdx = clamp(Number(saved.scene) || 0, 0, LIFE.memories.length - 1);
+  memoryScreen(memIdx);
+  return true;
+}
+function clearSavedRun() {
+  try { localStorage.removeItem(RUN_KEY); } catch { /* storage is optional */ }
 }
 function hasMemory(...effects) { return effects.some((effect) => RUN.memories.has(effect)); }
 function runSummary() {
@@ -190,6 +215,8 @@ function pickLives() {
   RUN.choices = {};
   RUN.signals = [];
   RUN.memories = new Set();
+  memIdx = 0;
+  clearSavedRun();
   persistRun();
 }
 
@@ -202,6 +229,7 @@ function render(html) {
 
 async function titleScreen() {
   AudioLayer.ensure(); AudioLayer.fade(0.0001, 0.1);
+  const saved = readSavedRun();
   render(`
     <div class="screen title-screen">
       <div class="title-topline"><span>ЦИКЛ / 047</span><span>ПОСЛЕ ЧЕЛОВЕКА</span></div>
@@ -211,7 +239,8 @@ async function titleScreen() {
         <h1 class="title serif"><span class="line">Всё, что от меня</span><span class="ost" data-t="ОСТАЛОСЬ">ОСТАЛОСЬ</span></h1>
         <p class="title-description">Они думали, что после последнего вдоха<br>никто не услышит тишину.</p>
         <div class="start-row">
-          <button class="button primary title-button" data-go="choose">Войти в архив <span>↗</span></button>
+          <button class="button primary title-button" data-go="${saved ? "resume" : "choose"}">${saved ? "Продолжить запись" : "Войти в архив"} <span>↗</span></button>
+          ${saved ? '<button class="button ghost" data-go="choose">Новая запись</button>' : ""}
         </div>
       </div>
       <div class="title-bottomline"><span>СИСТЕМА НЕ ОБНАРУЖИЛА ВЛАДЕЛЬЦА</span><span>НАУШНИКИ РЕКОМЕНДУЮТСЯ</span></div>
@@ -272,13 +301,16 @@ async function memoryScreen(idx) {
         </div>
         ${choices.length ? `<div class="memory-choices" role="group" aria-label="Выбор воспоминания">
           <span class="eyebrow">ЧТО ОСТАНЕТСЯ В ПАМЯТИ?</span>
-          <div class="row">${choices.map(c => `<button class="button ghost" data-choice="${c.id}" data-effect="${c.effect}">${c.label}</button>`).join("")}</div>
+          <div class="row">${choices.map(c => {
+            const selected = RUN.choices[idx] === c.id;
+            return `<button class="button ghost ${selected ? "selected" : ""}" data-choice="${c.id}" data-effect="${c.effect}"${selected ? " disabled" : ""}>${c.label}</button>`;
+          }).join("")}</div>
         </div>` : ""}
       </div>
       <div class="bar"><i style="width:${((idx + 1) / total) * 100}%"></i></div>
       <div class="scene-foot">
         <span class="faint" style="font-size:10px">${idx + 1 < total ? "память сохраняется неполностью · осталось " + (total - idx - 1) : "последний фрагмент · дальше только тишина"}</span>
-        <button class="button primary" data-go="${idx + 1 < total ? "next" : "death"}"${choices.length ? " disabled" : ""}>${idx + 1 < total ? "Дальше" : "Продолжить"}</button>
+        <button class="button primary" data-go="${idx + 1 < total ? "next" : "death"}"${choices.length && RUN.choices[idx] == null ? " disabled" : ""}>${idx + 1 < total ? "Дальше" : "Продолжить"}</button>
       </div>
     </div>`);
   const heading = $("#cap-h"), description = $("#cap-p");
@@ -1274,9 +1306,10 @@ document.addEventListener("click", (e) => {
   if (!go) return;
   AudioLayer.ensure();
   if (go === "title") titleScreen();
+  if (go === "resume") restoreRun();
   if (go === "choose" || go === "reroll") { pickLives(); chooseScreen(); }
   if (go === "mem") { memIdx = 0; memoryScreen(0); }
-  if (go === "next") { memIdx++; memoryScreen(memIdx); }
+  if (go === "next") { memIdx++; persistRun(); memoryScreen(memIdx); }
   if (go === "death") deathScreen();
   if (go === "space") transitionToSpace();
   if (go === "restart") { pickLives(); chooseScreen(); }
