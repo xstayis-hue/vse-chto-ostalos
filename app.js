@@ -838,6 +838,7 @@ void main(){
     events: { earth: false, moon: false, far: false },
     scanT: 0, nearbyExpedition: null, expeditionPrompt: null,
     pacing: { next: 78, beat: 0, lastMessage: 0, lastMovement: 0 },
+    braking: false,
   };
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -1156,13 +1157,11 @@ void main(){
     const B = basis(cam.yaw + brY, cam.pitch + brP);
 
     // физика полёта: тяга по направлению взгляда + дрейф (дистанции реальные — тяга высокая)
-    const accel = state.modal ? 0 : 28;
-    cam.vel.x += (B.f.x * state.thrust.y + B.r.x * state.thrust.x) * accel * dt;
-    cam.vel.y += (B.f.y * state.thrust.y + B.r.y * state.thrust.x) * accel * dt;
-    cam.vel.z += (B.f.z * state.thrust.y + B.r.z * state.thrust.x) * accel * dt;
-    const damp = Math.pow(0.985, dt * 60); // инерция/затухание, не зависит от FPS
-    cam.vel.x *= damp; cam.vel.y *= damp; cam.vel.z *= damp;
-    if (!state.modal) { cam.pos.x += cam.vel.x * dt; cam.pos.y += cam.vel.y * dt; cam.pos.z += cam.vel.z * dt; }
+    if (!state.modal) {
+      const flight = CalmFlight.step(cam.vel, state.thrust, B, dt, state.braking);
+      state.braking = flight.braking;
+      for (const axis of ["x", "y", "z"]) cam.pos[axis] += flight.movement[axis];
+    }
 
     // фон: при WebGL небо рисует three.js, 2D-слой прозрачный
     ctx.clearRect(0, 0, W, H);
@@ -1343,7 +1342,12 @@ void main(){
   addEventListener("keydown", onKD);
   addEventListener("keyup", onKU);
 
-  $("#k-slow").onclick = () => { cam.vel = { x: 0, y: 0, z: 0 }; AudioLayer.ping(180, 0.4, 0.05); };
+  $("#k-slow").onclick = () => {
+    endStick();
+    Object.keys(keyThrust).forEach(k => keyThrust[k] = false);
+    applyKeyThrust();
+    state.braking = true;
+  };
   $("#k-scan").onclick = () => {
     AudioLayer.ping(760, 0.6, 0.1);
     const undiscovered = EXPEDITIONS
