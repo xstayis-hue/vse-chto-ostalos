@@ -150,8 +150,30 @@ let offeredLives = [];
 const authoredLives = window.CURATED_LIVES || [];
 const lifePool = authoredLives.length ? authoredLives : generatedLifePool;
 const RUN = { choices: {}, signals: [], memories: new Set() };
+const RUN_KEY = "vse-chto-ostalos:last-run";
+function persistRun(status = "active") {
+  try {
+    localStorage.setItem(RUN_KEY, JSON.stringify({
+      status,
+      lifeId: LIFE?.id,
+      choices: RUN.choices,
+      memories: [...RUN.memories],
+      savedAt: new Date().toISOString(),
+    }));
+  } catch { /* приватный режим или отключённое хранилище — не блокируем игру */ }
+}
+function hasMemory(...effects) { return effects.some((effect) => RUN.memories.has(effect)); }
+function runSummary() {
+  return {
+    retained: RUN.memories.size,
+    choseReturn: RUN.memories.has("earth"),
+    choseDistance: RUN.memories.has("distance"),
+    answered: RUN.memories.has("voice"),
+  };
+}
 function pickLives() {
-  const shuffled = [...lifePool];
+  const availableLives = window.CURATED_LIVES?.length ? window.CURATED_LIVES : lifePool;
+  const shuffled = [...availableLives];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
@@ -161,6 +183,7 @@ function pickLives() {
   RUN.choices = {};
   RUN.signals = [];
   RUN.memories = new Set();
+  persistRun();
 }
 
 // ---------- рендер экранов ----------
@@ -291,7 +314,7 @@ async function deathScreen() {
         <button class="button primary" data-go="space" style="border-color:#8a9a94;color:#e6ece8">Открыть глаза</button>
       </div>
     </div>`);
-  await typeText($("#death-h"), LIFE.gender === 'f' ? "Ты умерла." : "Ты умер.", 90);
+  await typeText($("#death-h"), LIFE.death || (LIFE.gender === 'f' ? "Ты умерла." : "Ты умер."), 90);
   await pause(1600);
   if (!$("#death-p")) return;
   await typeText($("#death-p"), "Это не было похоже на конец.", 60);
@@ -1115,10 +1138,11 @@ void main(){
 
   async function eventMoon() {
     AudioLayer.whisper();
+    const held = hasMemory("memory", "earth");
     const go = await showOverlay({
       cy: false, title: "Сигнал · источник: Луна",
       quote: "Ты ещё не вернулся?",
-      body: `ГОЛОС ПРИНАДЛЕЖИТ ЖИЗНИ, КОТОРУЮ ТЫ ВЫБРАЛ.<br>АУДИОЗАПИСЬ: <b>НЕТ</b>. ИСТОЧНИК: <b>НЕТ</b>.`,
+      body: `${held ? "ГОЛОС ПРИНАДЛЕЖИТ ЖИЗНИ, КОТОРУЮ ТЫ ВЫБРАЛ." : "ГОЛОС НЕ СОВПАДАЕТ С СОХРАНЁННЫМИ ВОСПОМИНАНИЯМИ."}<br>АУДИОЗАПИСЬ: <b>НЕТ</b>. ИСТОЧНИК: <b>НЕТ</b>.`,
       actions: [["Записать в память", "keep"], ["Улететь", "leave"]],
     });
     if (go === "keep") {
@@ -1128,11 +1152,13 @@ void main(){
 
   async function eventSignal() {
     AudioLayer.whisper();
+    const carried = hasMemory("memory", "voice");
+    const summary = runSummary();
     const go = await showOverlay({
       cy: false, title: "Сигнал · дальний",
       quote: "Ты ещё успеешь?",
-      body: `ПОСЛЕДНЯЯ МЫСЛЬ ОБЪЕКТА ВОЗВРАЩАЕТСЯ ИЗ ТОЧКИ,<br>ГДЕ НЕТ НИ ЗЕМЛИ, НИ ЛУНЫ, НИ ТЕБЯ.`,
-      actions: [["Передать память дальше", "send"], ["Оставить себе", "keep"]],
+      body: `${carried ? "ПОСЛЕДНЯЯ МЫСЛЬ ОБЪЕКТА ВОЗВРАЩАЕТСЯ ИЗ ТОЧКИ," : "СИГНАЛ ВОЗВРАЩАЕТСЯ БЕЗ ПОСЛЕДНЕЙ МЫСЛИ."}<br>ГДЕ НЕТ НИ ЗЕМЛИ, НИ ЛУНЫ, НИ ТЕБЯ.`,
+      actions: [[summary.answered ? "Ответить сигналу" : "Передать пустой канал", "send"], ["Оставить себе", "keep"]],
     });
     if (go === "send" || go === "keep") ending(go);
   }
@@ -1150,13 +1176,22 @@ void main(){
     AudioLayer.fade(0.0001, 4);
     state.dead = true; cancelAnimationFrame(state.raf);
     flashOn();
+    const summary = runSummary();
+    persistRun("complete");
+    const retained = summary.retained;
+    const endingTitle = choice === "keep"
+      ? (summary.choseReturn ? "Память вернулась к Земле" : retained >= 2 ? "Память не исчезла" : "Память осталась одна")
+      : (summary.answered ? "Память получила ответ" : retained >= 2 ? "Память передана" : "Передавать было нечего");
+    const endingText = choice === "keep"
+      ? `${summary.choseReturn ? "Ты вернулся к Земле, но Земля не ответила. " : "Ты сохранил "}${retained ? "часть этой жизни" : "только тишину"}. В темноте она звучит всё тише, но пока ещё принадлежит тебе.`
+      : `${summary.answered ? "Сигнал ответил твоим голосом. " : "Канал остался пустым. "}Ты отправил память дальше — ${retained ? "вместе с тем, что успел сохранить" : "почти без следа"}. Теперь она летит туда, где нет получателя.`;
     render(`
       <div class="screen">
         <div class="ending-wrap">
           <div class="eyebrow">${choice === "keep" ? "память сохранена · свидетель не определён" : "память передана · получатель не определён"}</div>
           <h1 class="serif">Всё, что от меня<span class="ost">ОСТАЛОСЬ</span></h1>
-          <div class="system">«Ты ещё успеешь?»</div>
-          <p class="faint" style="max-width:420px;margin:14px auto 0">${choice === "keep" ? "Ты сохранил этот голос. В темноте он звучит всё тише, но пока ещё принадлежит тебе." : "Голос был твой. Ты спрашивал себя — но изнутри жизни это звучит как вопрос от кого-то другого. Теперь он летит дальше."}</p>
+          <div class="system">${endingTitle}</div>
+          <p class="faint" style="max-width:420px;margin:14px auto 0">${endingText}</p>
           <div class="row center">
             <button class="button primary" data-go="restart">Начать снова</button>
             <button class="button ghost" data-go="title">Закрыть архив</button>
@@ -1195,6 +1230,7 @@ document.addEventListener("click", (e) => {
     const scene = LIFE.memories[memIdx];
     RUN.choices[memIdx] = decision.dataset.choice;
     RUN.memories.add(decision.dataset.effect);
+    persistRun();
     decision.parentElement.querySelectorAll("[data-choice]").forEach((b) => {
       b.disabled = true;
       b.classList.toggle("selected", b === decision);
@@ -1205,7 +1241,7 @@ document.addEventListener("click", (e) => {
     return;
   }
   const choice = e.target.closest('[data-life]');
-  if (choice) { LIFE = lifePool[Number(choice.dataset.life)]; chooseScreen(); return; }
+  if (choice) { LIFE = lifePool.find((life) => String(life.id) === choice.dataset.life) || lifePool[0]; chooseScreen(); return; }
   const go = e.target.closest("[data-go]")?.dataset.go;
   if (!go) return;
   AudioLayer.ensure();
