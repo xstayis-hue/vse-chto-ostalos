@@ -768,14 +768,57 @@ void main(){
       };
       const loader = new THREE.TextureLoader();
       const names = { 'СОЛНЦЕ':'sun', 'ЗЕМЛЯ':'earth', 'ЛУНА':'moon', 'МЕРКУРИЙ':'mercury', 'ВЕНЕРА':'venus', 'МАРС':'mars', 'ЮПИТЕР':'jupiter', 'САТУРН':'saturn', 'УРАН':'uranus', 'НЕПТУН':'neptune' };
+      const materialSpec = {
+        'ЗЕМЛЯ': { roughness: .86, metalness: 0, atmosphere: true },
+        'ЛУНА': { roughness: 1, metalness: 0, bump: .16 },
+        'МАРС': { roughness: .96, metalness: 0, bump: .1 },
+        'МЕРКУРИЙ': { roughness: 1, metalness: 0, bump: .08 },
+        'ВЕНЕРА': { roughness: .92, metalness: 0, atmosphere: true },
+        'ЮПИТЕР': { roughness: .94, metalness: 0, atmosphere: true },
+        'САТУРН': { roughness: .94, metalness: 0, atmosphere: true },
+        'УРАН': { roughness: .9, metalness: 0, atmosphere: true },
+        'НЕПТУН': { roughness: .9, metalness: 0, atmosphere: true },
+      };
+      const makeCloudTexture = () => {
+        const c = document.createElement('canvas'); c.width = 512; c.height = 256;
+        const x = c.getContext('2d'); const image = x.createImageData(c.width, c.height);
+        let seed = 17831;
+        const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+        for (let y = 0; y < c.height; y++) for (let xx = 0; xx < c.width; xx++) {
+          const wave = Math.sin(xx * .055 + Math.sin(y * .035) * 2.4) * .5 + .5;
+          const noise = random(); const alpha = Math.max(0, (wave * .58 + noise * .42 - .64) * 2.1);
+          const i = (y * c.width + xx) * 4; image.data[i] = 235; image.data[i + 1] = 245; image.data[i + 2] = 238; image.data[i + 3] = alpha * 105;
+        }
+        x.putImageData(image, 0, 0);
+        const texture = new THREE.CanvasTexture(c); texture.colorSpace = THREE.SRGBColorSpace; texture.wrapS = THREE.RepeatWrapping; texture.needsUpdate = true;
+        return texture;
+      };
+      const cloudTexture = makeCloudTexture();
+      const atmosphereMaterial = (color, opacity) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, side: THREE.BackSide, depthWrite: false, blending: THREE.AdditiveBlending });
       const meshes = [];
+      let earthClouds = null;
       for (const body of BODIES) {
         const texture = body.sun ? null : loader.load(`assets/${names[body.name]}.jpg`);
-        if (texture) texture.colorSpace = THREE.SRGBColorSpace;
-        const material = body.sun ? makeSunMaterial(scene) : new THREE.MeshStandardMaterial({ map: texture, roughness: 1 });
+        if (texture) {
+          texture.colorSpace = THREE.SRGBColorSpace;
+          texture.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+          texture.generateMipmaps = true;
+          texture.minFilter = THREE.LinearMipmapLinearFilter;
+        }
+        const spec = materialSpec[body.name] || { roughness: .96, metalness: 0 };
+        const material = body.sun ? makeSunMaterial(scene) : new THREE.MeshStandardMaterial({ map: texture, roughness: spec.roughness, metalness: spec.metalness, bumpMap: spec.bump ? texture : null, bumpScale: spec.bump || 0 });
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.set(body.x, body.y, body.z); mesh.scale.setScalar(body.r);
         scene.add(mesh); meshes.push(mesh);
+        if (spec.atmosphere) {
+          const halo = new THREE.Mesh(new THREE.SphereGeometry(1.018, 32, 24), atmosphereMaterial(body.name === 'ЗЕМЛЯ' ? 0x78aab2 : 0x9ba99c, body.name === 'ЗЕМЛЯ' ? .12 : .055));
+          halo.position.copy(mesh.position); halo.scale.setScalar(body.r); scene.add(halo);
+          mesh.userData.atmosphere = halo;
+        }
+        if (body.name === 'ЗЕМЛЯ') {
+          earthClouds = new THREE.Mesh(new THREE.SphereGeometry(1.012, 40, 24), new THREE.MeshStandardMaterial({ map: cloudTexture, transparent: true, opacity: .48, roughness: 1, depthWrite: false }));
+          earthClouds.position.copy(mesh.position); earthClouds.scale.setScalar(body.r); scene.add(earthClouds);
+        }
         if (body.ring) {
           // Кольца не одним гладким диском: реальные кольца — это пыль и лёд,
           // собранные в сотни полос с промежутками Кассини.
@@ -788,7 +831,7 @@ void main(){
           ringBands.forEach(([inner, outer, opacity], index) => {
             const material = new THREE.MeshStandardMaterial({
               color: index % 3 === 0 ? 0xb8ae98 : index % 3 === 1 ? 0x8f8878 : 0xc8bfa8,
-              roughness: 1, metalness: 0, side: THREE.DoubleSide,
+              roughness: .92, metalness: 0, side: THREE.DoubleSide,
               transparent: true, opacity, depthWrite: false
             });
             const band = new THREE.Mesh(new THREE.RingGeometry(body.r * inner, body.r * outer, 128), material);
@@ -814,7 +857,7 @@ void main(){
  scene.add(mesh);
         return { mesh, parentMesh, d: m.d, speed: m.speed, phase: Math.random() * Math.PI * 2 };
       });
-      space3d = { renderer, scene, camera, meshes, starField, starMaterial, nebulaGroup, nebulaSprites, quality, station, glint, sunUniforms: sunShader.uniforms, moons };
+      space3d = { renderer, scene, camera, meshes, starField, starMaterial, nebulaGroup, nebulaSprites, quality, station, glint, earthClouds, cloudTexture, sunUniforms: sunShader.uniforms, moons };
     } catch (error) { console.warn('WebGL недоступен; используется резервный рендер', error); }
   }
 
@@ -1235,6 +1278,11 @@ void main(){
       nebulaSprites.forEach(sprite => {
         sprite.material.opacity = sprite.userData.base * (0.82 + 0.18 * Math.sin(state.t * 0.16 + sprite.userData.phase));
       });
+      if (space3d.earthClouds) {
+        space3d.earthClouds.position.set(EARTH.x, EARTH.y, EARTH.z);
+        space3d.earthClouds.rotation.y = state.t * 0.012;
+        space3d.earthClouds.material.opacity = space3d.quality.level === "economy" ? .28 : .48;
+      }
       camera.lookAt(cam.pos.x + B.f.x, cam.pos.y + B.f.y, cam.pos.z + B.f.z);
       meshes.forEach((mesh, i) => {
         const body = BODIES[i];
@@ -1517,6 +1565,7 @@ void main(){
     if (space3d) {
       space3d.scene.background?.dispose();
       space3d.scene.traverse((o) => { o.geometry?.dispose(); o.material?.map?.dispose(); o.material?.dispose(); });
+      space3d.cloudTexture?.dispose();
       space3d.renderer.dispose();
       space3d.renderer.forceContextLoss();
     }
