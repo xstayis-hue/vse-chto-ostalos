@@ -423,12 +423,14 @@ button:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
   transition: opacity 1.8s ease, border-color 1.8s ease;
 }
 .signal-state:not(:empty) { opacity: 1; }
+.signal-state.quiet-pulse { animation: quietSignal 2.8s ease-in-out 1; }
 .calm-controls .button { opacity: .42; transition: opacity 1s ease, border-color .3s, color .3s; }
 .calm-controls:hover .button, .calm-controls:focus-within .button { opacity: .9; }
 .quality-state, .expedition-state { display: none; }
 .hint { opacity: .28; transition: opacity 1.2s ease; }
 .hud { opacity: .72; transition: opacity 2s ease; }
 .hud:hover, .hud:focus-within { opacity: 1; }
+@keyframes quietSignal { 0%, 100% { opacity: .25; } 35% { opacity: .82; } 70% { opacity: .55; } }
 .result-card {
   display: grid;
   gap: 6px;

@@ -607,6 +607,7 @@ function spaceScreen() {
         fastFrames: 0,
         measured: 0,
         emaMs: 16.7,
+        starOpacity: 0.9,
       };
       renderer.setPixelRatio(Math.min(devicePixelRatio || 1, quality.dprCap));
       renderer.setSize(stage.clientWidth, stage.clientHeight);
@@ -831,7 +832,13 @@ void main(){
     return { x, y: y0 / n, z: z / n, m: 0.12 + Math.random() * 0.3 };
   });
 
-  const state = { dead: false, modal: false, raf: 0, t: 0, last: 0, thrust: { x: 0, y: 0 }, events: { earth: false, moon: false, far: false }, scanT: 0, nearbyExpedition: null, expeditionPrompt: null };
+  const state = {
+    dead: false, modal: false, raf: 0, t: 0, last: 0,
+    thrust: { x: 0, y: 0 },
+    events: { earth: false, moon: false, far: false },
+    scanT: 0, nearbyExpedition: null, expeditionPrompt: null,
+    pacing: { next: 78, beat: 0, lastMessage: 0, lastMovement: 0 },
+  };
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function resize() {
@@ -843,6 +850,40 @@ void main(){
   }
   resize();
   addEventListener("resize", resize);
+
+  function quietSignal(text, duration = 6200) {
+    const signal = $("#signal-state");
+    if (!signal) return;
+    signal.textContent = text;
+    signal.classList.remove("quiet-pulse");
+    void signal.offsetWidth;
+    signal.classList.add("quiet-pulse");
+    setTimeout(() => {
+      if (signal.isConnected && signal.textContent === text) signal.textContent = "";
+    }, duration);
+  }
+
+  // Космос не выдаёт задания по таймеру. Директор лишь иногда меняет
+  // атмосферу после длинного окна тишины, не останавливая полёт.
+  function pacingDirector(dt) {
+    const p = state.pacing;
+    const speed = Math.hypot(cam.vel.x, cam.vel.y, cam.vel.z);
+    if (speed > 0.18) p.lastMovement = state.t;
+    if (state.modal || state.t < p.next || state.t - p.lastMovement < 8) return;
+    p.beat += 1;
+    p.lastMessage = state.t;
+    const branch = branchSignalCopy();
+    const quietBeats = [
+      { line: "ЗВЁЗДЫ НА МГНОВЕНИЕ СТАЛИ БЛИЖЕ.", freq: 260 },
+      { line: "В ТИШИНЕ ПОЯВИЛСЯ РИТМ. НЕ ТВОЙ.", freq: 310 },
+      { line: `${branch.code}: СЛЕД НЕ ТРЕБУЕТ ОТВЕТА.`, freq: 220 },
+      { line: "ОДНА ТОЧКА СВЕТА ДВИЖЕТСЯ ВМЕСТЕ С ТОБОЙ.", freq: 280 },
+    ];
+    const beat = quietBeats[(p.beat - 1) % quietBeats.length];
+    AudioLayer.ping(beat.freq, 2.8, 0.018);
+    quietSignal(beat.line, 7200);
+    p.next = state.t + Math.min(210, 78 + p.beat * 24);
+  }
 
   // --- ориентация камеры: yaw/pitch -> базис (с учётом «дыхания») ---
   function basis(yaw = cam.yaw, pitch = cam.pitch) {
@@ -1068,7 +1109,8 @@ void main(){
     q.level = level;
     q.dprCap = level === "economy" ? 1 : level === "balanced" ? 1.25 : (matchMedia('(pointer: coarse)').matches ? 1.25 : 2);
     space3d.renderer.setPixelRatio(Math.min(devicePixelRatio || 1, q.dprCap));
-    if (space3d.starMaterial) space3d.starMaterial.opacity = level === "economy" ? 0.62 : 0.9;
+    q.starOpacity = level === "economy" ? 0.62 : level === "balanced" ? 0.78 : 0.9;
+    if (space3d.starMaterial) space3d.starMaterial.opacity = q.starOpacity;
     space3d.nebulaSprites?.forEach((sprite) => {
       sprite.material.opacity = sprite.userData.base * (level === "economy" ? 0.55 : level === "balanced" ? 0.72 : 1);
     });
@@ -1100,6 +1142,7 @@ void main(){
     state.last = now;
     state.t += dt;
     if (space3d) adaptQuality(dt);
+    pacingDirector(dt);
     for (const orbit of orbiting) {
       const angle = orbit.angle + state.t * orbit.speed;
       orbit.body.x = Math.cos(angle) * orbit.radius;
@@ -1186,6 +1229,8 @@ void main(){
       starField.position.copy(camera.position);
       starField.rotation.y = state.t * 0.00018;
       starMaterial.uniforms.uTime.value = state.t;
+      // Едва заметное изменение плотности звёзд заменяет постоянные маркеры.
+      starMaterial.opacity = space3d.quality.starOpacity * (0.94 + Math.sin(state.t * 0.035) * 0.06);
       space3d.sunUniforms.uTime.value = state.t;
       space3d.moons.forEach(m => {
         const a = m.phase + state.t * m.speed;
