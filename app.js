@@ -169,7 +169,7 @@ const generatedLifePool = Array.from({length:100}, (_, i) => {
 let offeredLives = [];
 const authoredLives = window.CURATED_LIVES || [];
 const lifePool = authoredLives.length ? authoredLives : generatedLifePool;
-const RUN = { choices: {}, signals: [], memories: new Set() };
+const RUN = { choices: {}, signals: [], memories: new Set(), expeditions: [] };
 const RUN_KEY = "vse-chto-ostalos:last-run";
 function persistRun(status = "active") {
   try {
@@ -178,6 +178,7 @@ function persistRun(status = "active") {
       lifeId: LIFE?.id,
       choices: RUN.choices,
       signals: RUN.signals,
+      expeditions: RUN.expeditions,
       memories: [...RUN.memories],
       scene: Number.isInteger(memIdx) ? memIdx : 0,
       savedAt: new Date().toISOString(),
@@ -199,6 +200,7 @@ function restoreRun() {
   LIFE = saved.life;
   RUN.choices = saved.choices || {};
   RUN.signals = saved.signals || [];
+  RUN.expeditions = saved.expeditions || [];
   RUN.memories = new Set(saved.memories || []);
   memIdx = clamp(Number(saved.scene) || 0, 0, LIFE.memories.length - 1);
   memoryScreen(memIdx);
@@ -300,6 +302,7 @@ function pickLives() {
   RUN.choices = {};
   RUN.signals = [];
   RUN.memories = new Set();
+  RUN.expeditions = [];
   memIdx = 0;
   clearSavedRun();
   persistRun();
@@ -476,6 +479,7 @@ function spaceScreen() {
       </div>
       <div class="signal-state" id="signal-state">СИГНАЛ: ИСТОЧНИК НЕ ОПРЕДЕЛЁН</div>
       <div class="quality-state" id="quality-state">РЕНДЕР: АВТО</div>
+      <div class="expedition-state" id="expedition-state">ЭКСПЕДИЦИЙ: 0 / 3</div>
       <div class="hud-row" style="align-items:flex-end">
         <div class="dpad" id="dpad">
           <button class="dbtn" data-th="f" aria-label="вперёд">▲</button>
@@ -797,7 +801,7 @@ void main(){
     return { x, y: y0 / n, z: z / n, m: 0.12 + Math.random() * 0.3 };
   });
 
-  const state = { dead: false, modal: false, raf: 0, t: 0, last: 0, thrust: { x: 0, y: 0 }, events: { earth: false, moon: false, far: false }, scanT: 0 };
+  const state = { dead: false, modal: false, raf: 0, t: 0, last: 0, thrust: { x: 0, y: 0 }, events: { earth: false, moon: false, far: false }, scanT: 0, nearbyExpedition: null, expeditionPrompt: null };
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function resize() {
@@ -982,6 +986,38 @@ void main(){
       s: 0.02 + Math.random() * 0.06, spin: Math.random() * Math.PI, drift: 0.02 + Math.random() * 0.05 };
   });
   const STATION = { x: -7.5, y: 1.8, z: -7.5 };
+  const EXPEDITIONS = [
+    { id: "moon-back", name: "ОБРАТНАЯ СТОРОНА ЛУНЫ", x: EARTH.x + 1.8, y: 0.8, z: EARTH.z - 4.6, radius: 1.6, title: "СИГНАЛ С ОБРАТНОЙ СТОРОНЫ", body: "КТО-ТО ОСТАВИЛ ТАМ ОДНУ ФРАЗУ И НЕ ЗАБРАЛ ЕЁ ОБРАТНО.", effect: "moon-trace" },
+    { id: "dead-station", name: "СТАНЦИЯ БЕЗ СМЕНЫ", x: STATION.x, y: STATION.y, z: STATION.z, radius: 2.2, title: "СТАНЦИЯ ПРОДОЛЖАЕТ РАБОТУ", body: "РАСПИСАНИЕ СМЕН ОБНОВЛЕНО СЕГОДНЯ. ЭКИПАЖ НЕ НАЙДЕН.", effect: "station-log" },
+    { id: "echo-orbit", name: "ЭХО ПОСЛЕДНЕЙ МЫСЛИ", x: 22, y: -2.5, z: 12, radius: 3.4, title: "МЫСЛЬ НЕ ИМЕЕТ ВЛАДЕЛЬЦА", body: "ОНА ПОВТОРЯЕТСЯ КАЖДЫЕ 47 СЕКУНД. ТЕПЕРЬ В НЕЙ ЕСТЬ ТВОЙ ГОЛОС.", effect: "echo-fragment" },
+  ];
+  function expeditionCount() { return RUN.expeditions.length; }
+  function updateExpeditionHud() {
+    const el = $("#expedition-state");
+    if (el) el.textContent = `ЭКСПЕДИЦИЙ: ${expeditionCount()} / ${EXPEDITIONS.length}`;
+  }
+  updateExpeditionHud();
+  function expeditionDistance(exp) {
+    return Math.hypot(cam.pos.x - exp.x, cam.pos.y - exp.y, cam.pos.z - exp.z) - exp.radius;
+  }
+  async function inspectExpedition(exp) {
+    if (state.modal) return;
+    const result = await showOverlay({
+      cy: false,
+      title: exp.title,
+      quote: exp.name,
+      body: `${exp.body}<br><span style="color:var(--dim)">СТАТУС: ОБЪЕКТ ДОСТИГНУТ · СВЯЗЬ С ЖИЗНЬЮ: ${Math.round(35 + RUN.memories.size * 12)}%</span>`,
+      actions: [["Сохранить в архив", "save"], ["Улететь", "leave"]],
+    });
+    if (result === "save" && !RUN.expeditions.includes(exp.id)) {
+      RUN.expeditions.push(exp.id);
+      RUN.memories.add(exp.effect);
+      persistRun();
+      updateExpeditionHud();
+      Haptics.notification("success");
+      toast(`ОБЪЕКТ СОХРАНЁН · ${expeditionCount()} / ${EXPEDITIONS.length}<br>НОВЫЙ СИГНАЛ ДОБАВЛЕН В АРХИВ.`);
+    }
+  }
   function worldPts(B, list, draw) {
     const f = (W / 2) / Math.tan(FOV / 2);
     const arr = [];
@@ -1149,6 +1185,31 @@ void main(){
       ctx.fillRect(pr.x - sz / 2, pr.y - sz / 2, sz, sz);
     });
     ctx.globalAlpha = 1;
+    let nearestExp = null;
+    for (const exp of EXPEDITIONS) {
+      if (RUN.expeditions.includes(exp.id)) continue;
+      const d = expeditionDistance(exp);
+      if (!nearestExp || d < nearestExp.d) nearestExp = { exp, d };
+      const pr = project(exp, B);
+      if (pr.ok && pr.depth > 0.3) {
+        const pulse = 3 + Math.sin(state.t * 2.4) * 1.2;
+        ctx.strokeStyle = "rgba(201,168,106,.8)";
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(pr.x, pr.y, 9 + pulse, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = "rgba(201,168,106,.9)";
+        ctx.fillRect(pr.x - 1, pr.y - 1, 3, 3);
+      }
+    }
+    if (nearestExp && nearestExp.d < 2.2) {
+      state.nearbyExpedition = nearestExp.exp;
+      if (state.expeditionPrompt !== nearestExp.exp.id) {
+        state.expeditionPrompt = nearestExp.exp.id;
+        toast(`<span style="color:var(--amber)">${nearestExp.exp.name}</span><br>ОБЪЕКТ В ПРЕДЕЛАХ СКАНИРОВАНИЯ.`);
+      }
+    } else {
+      state.nearbyExpedition = null;
+      state.expeditionPrompt = null;
+    }
 
     // HUD-дистанции
     const dE = Math.hypot(cam.pos.x - EARTH.x, cam.pos.y - EARTH.y, cam.pos.z - EARTH.z) - EARTH.r;
@@ -1240,6 +1301,10 @@ void main(){
     for (const b of BODIES) {
       const d = Math.hypot(cam.pos.x - b.x, cam.pos.y - b.y, cam.pos.z - b.z) - b.r;
       if (d < near.d) near = { name: b.name, d };
+    }
+    if (state.nearbyExpedition && !RUN.expeditions.includes(state.nearbyExpedition.id)) {
+      inspectExpedition(state.nearbyExpedition);
+      return;
     }
     let msg;
     if (near.name === "СОЛНЦЕ" && near.d < 25) msg = `СОЛНЦЕ · дистанция ${near.d.toFixed(1)} R<br>ТЕЛО ОБЛЕТЕЛО ЦЕНТР СИСТЕМЫ.<br><span style="color:var(--danger)">РАДИАЦИЯ НЕ ИМЕЕТ СМЫСЛА ДЛЯ ТОГО, ЧТО ОСТАЛОСЬ.</span>`;
