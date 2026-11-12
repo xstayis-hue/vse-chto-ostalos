@@ -171,6 +171,13 @@ function runSummary() {
     answered: RUN.memories.has("voice"),
   };
 }
+function signalBranch() {
+  if (hasMemory("voice")) return "ГОЛОС ОТВЕЧАЕТ ТЕБЕ";
+  if (hasMemory("earth")) return "СИГНАЛ НАПРАВЛЕН К ЗЕМЛЕ";
+  if (hasMemory("distance")) return "СИГНАЛ УХОДИТ ДАЛЬШЕ";
+  if (hasMemory("quiet")) return "КАНАЛ ОСТАЁТСЯ ПУСТЫМ";
+  return "ИСТОЧНИК НЕ ОПРЕДЕЛЁН";
+}
 function pickLives() {
   const availableLives = window.CURATED_LIVES?.length ? window.CURATED_LIVES : lifePool;
   const shuffled = [...availableLives];
@@ -349,6 +356,7 @@ function spaceScreen() {
           <p>СКОРОСТЬ: <b id="v-now">0.00</b></p>
         </div>
       </div>
+      <div class="signal-state" id="signal-state">СИГНАЛ: ИСТОЧНИК НЕ ОПРЕДЕЛЁН</div>
       <div class="hud-row" style="align-items:flex-end">
         <div class="dpad" id="dpad">
           <button class="dbtn" data-th="f" aria-label="вперёд">▲</button>
@@ -1138,6 +1146,10 @@ void main(){
 
   async function eventMoon() {
     AudioLayer.whisper();
+    RUN.signals.push({ source: "moon", branch: signalBranch() });
+    persistRun();
+    const signalState = $("#signal-state");
+    if (signalState) signalState.textContent = `СИГНАЛ: ${signalBranch()}`;
     const held = hasMemory("memory", "earth");
     const go = await showOverlay({
       cy: false, title: "Сигнал · источник: Луна",
@@ -1152,6 +1164,10 @@ void main(){
 
   async function eventSignal() {
     AudioLayer.whisper();
+    RUN.signals.push({ source: "deep", branch: signalBranch() });
+    persistRun();
+    const signalState = $("#signal-state");
+    if (signalState) signalState.textContent = `СИГНАЛ: ${signalBranch()}`;
     const carried = hasMemory("memory", "voice");
     const summary = runSummary();
     const go = await showOverlay({
@@ -1185,6 +1201,9 @@ void main(){
     const endingText = choice === "keep"
       ? `${summary.choseReturn ? "Ты вернулся к Земле, но Земля не ответила. " : "Ты сохранил "}${retained ? "часть этой жизни" : "только тишину"}. В темноте она звучит всё тише, но пока ещё принадлежит тебе.`
       : `${summary.answered ? "Сигнал ответил твоим голосом. " : "Канал остался пустым. "}Ты отправил память дальше — ${retained ? "вместе с тем, что успел сохранить" : "почти без следа"}. Теперь она летит туда, где нет получателя.`;
+    const choiceText = Object.values(RUN.choices).length
+      ? Object.values(RUN.choices).join(" · ")
+      : "решения не сохранены";
     render(`
       <div class="screen">
         <div class="ending-wrap">
@@ -1192,9 +1211,11 @@ void main(){
           <h1 class="serif">Всё, что от меня<span class="ost">ОСТАЛОСЬ</span></h1>
           <div class="system">${endingTitle}</div>
           <p class="faint" style="max-width:420px;margin:14px auto 0">${endingText}</p>
+          <div class="result-card"><span>ОТПЕЧАТОК ПРОХОЖДЕНИЯ</span><b>${LIFE.name}</b><small>${LIFE.symbol || "след не определён"} · ${choiceText} · ${retained} фрагм.</small></div>
           <div class="row center">
             <button class="button primary" data-go="restart">Начать снова</button>
             <button class="button ghost" data-go="title">Закрыть архив</button>
+            <button class="button ghost" data-share>Поделиться результатом</button>
           </div>
         </div>
       </div>`);
@@ -1238,6 +1259,13 @@ document.addEventListener("click", (e) => {
     const advance = stage.querySelector(".scene-foot [data-go]");
     if (advance) advance.disabled = false;
     if (scene) scene.selected = decision.dataset.choice;
+    return;
+  }
+  if (e.target.closest("[data-share]")) {
+    const summary = runSummary();
+    const text = `Я прожил жизнь ${LIFE.name} в «Всё, что от меня ОСТАЛОСЬ». Сохранено фрагментов: ${summary.retained}.`;
+    if (navigator.share) navigator.share({ title: "Всё, что от меня ОСТАЛОСЬ", text }).catch(() => {});
+    else navigator.clipboard?.writeText(text).then(() => alert("Результат скопирован"), () => {});
     return;
   }
   const choice = e.target.closest('[data-life]');

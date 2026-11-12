@@ -387,3 +387,23 @@ button:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
 .memory-choices .button { min-height: 38px; font-size: 11px; }
 .memory-choices .button.selected { border-color: var(--amber); color: var(--amber); }
 .memory-choices .button:disabled { opacity: .9; cursor: default; }
+.signal-state {
+  margin: 0 20px;
+  padding: 7px 10px;
+  border: 1px solid rgba(143, 209, 194, .22);
+  color: var(--dim);
+  font: 10px var(--mono, monospace);
+  letter-spacing: .08em;
+  text-align: center;
+}
+.result-card {
+  display: grid;
+  gap: 6px;
+  max-width: 360px;
+  margin: 22px auto;
+  padding: 14px;
+  border: 1px solid rgba(143, 209, 194, .25);
+  text-align: left;
+}
+.result-card span, .result-card small { color: var(--dim); font: 10px var(--mono, monospace); }
+.result-card b { color: var(--paper); font-weight: 500; }
