@@ -64,12 +64,13 @@
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
+html, body { margin: 0; height: 100%; min-height: 100dvh; background: var(--bg); overflow: hidden; }
 body { font-family: "Courier New", monospace; color: var(--ink); -webkit-font-smoothing: antialiased; }
-button { font: inherit; color: inherit; cursor: pointer; background: none; }
+button { font: inherit; color: inherit; cursor: pointer; background: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+button:disabled { cursor: default; opacity: .45; transform: none !important; }
 button:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
 
-#app { position: fixed; inset: 0; background: var(--bg); }
+#app { position: fixed; inset: 0; min-height: 100dvh; background: var(--bg); }
 #stage { position: absolute; inset: 0; }
 #grain { position: absolute; inset: -50%; pointer-events: none; z-index: 40; opacity: .07;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");

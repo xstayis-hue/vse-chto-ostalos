@@ -5,6 +5,26 @@
 // ---------- Telegram Mini App ----------
 const TG = window.Telegram?.WebApp;
 if (TG) { TG.ready(); TG.expand(); TG.setHeaderColor?.('#030507'); TG.setBackgroundColor?.('#030507'); TG.disableVerticalSwipes?.(); }
+const Haptics = {
+  impact(style = "light") { TG?.HapticFeedback?.impactOccurred?.(style); },
+  selection() { TG?.HapticFeedback?.selectionChanged?.(); },
+  notification(type = "success") { TG?.HapticFeedback?.notificationOccurred?.(type); },
+};
+function syncTelegramTheme() {
+  const p = TG?.themeParams;
+  if (!p) return;
+  const root = document.documentElement;
+  if (p.bg_color) root.style.setProperty("--bg", p.bg_color);
+  if (p.text_color) root.style.setProperty("--ink", p.text_color);
+  if (p.hint_color) root.style.setProperty("--muted", p.hint_color);
+  if (p.button_color) root.style.setProperty("--cyan", p.button_color);
+  if (p.destructive_text_color) root.style.setProperty("--danger", p.destructive_text_color);
+}
+syncTelegramTheme();
+TG?.onEvent?.("themeChanged", syncTelegramTheme);
+TG?.onEvent?.("viewportChanged", () => {
+  document.documentElement.style.setProperty("--tg-viewport-height", `${TG.viewportHeight || window.innerHeight}px`);
+});
 
 // ---------- утилиты ----------
 const $ = (s, r = document) => r.querySelector(s);
@@ -395,9 +415,10 @@ function transitionToSpace() {
   const finish = () => { if (!completed && $('.departure')) { completed = true; spaceScreen(); } };
   video.addEventListener('ended', finish, { once: true });
   video.addEventListener('error', finish, { once: true });
-  video.play().catch(finish);
-  setTimeout(() => { if (!video.currentTime || video.readyState < 2) finish(); }, 2500);
-  setTimeout(finish, 9000);
+  video.play().catch(() => { Haptics.notification("warning"); finish(); });
+  const fallbackTimer = setTimeout(() => { if (!video.currentTime || video.readyState < 2) finish(); }, 2500);
+  const hardTimer = setTimeout(finish, 9000);
+  video.addEventListener("ended", () => { clearTimeout(fallbackTimer); clearTimeout(hardTimer); }, { once: true });
 }
 
 async function deathScreen() {
@@ -1294,6 +1315,7 @@ void main(){
 
   function ending(choice = "send") {
     AudioLayer.fade(0.0001, 4);
+    Haptics.notification("success");
     state.dead = true; cancelAnimationFrame(state.raf);
     flashOn();
     const summary = runSummary();
@@ -1353,6 +1375,7 @@ document.addEventListener("click", (e) => {
   if (AudioLayer.ctx?.state === "suspended") AudioLayer.ctx.resume().catch(() => {});
   const decision = e.target.closest("[data-choice]");
   if (decision) {
+    Haptics.impact("light");
     const scene = LIFE.memories[memIdx];
     RUN.choices[memIdx] = decision.dataset.choice;
     RUN.memories.add(decision.dataset.effect);
@@ -1367,6 +1390,7 @@ document.addEventListener("click", (e) => {
     return;
   }
   if (e.target.closest("[data-share]")) {
+    Haptics.impact("medium");
     const text = resultText();
     if (TG?.switchInlineQuery) TG.switchInlineQuery(text, ["users", "groups", "channels"]);
     else if (navigator.share) navigator.share({ title: "Всё, что от меня ОСТАЛОСЬ", text }).catch(() => {});
@@ -1374,6 +1398,7 @@ document.addEventListener("click", (e) => {
     return;
   }
   if (e.target.closest("[data-card]")) {
+    Haptics.impact("light");
     downloadResultCard();
     return;
   }
@@ -1382,6 +1407,7 @@ document.addEventListener("click", (e) => {
   const go = e.target.closest("[data-go]")?.dataset.go;
   if (!go) return;
   AudioLayer.ensure();
+  Haptics.selection();
   if (go === "title") titleScreen();
   if (go === "resume") restoreRun();
   if (go === "choose" || go === "reroll") { pickLives(); chooseScreen(); }
