@@ -794,7 +794,18 @@ void main(){
         return texture;
       };
       const cloudTexture = makeCloudTexture();
-      const atmosphereMaterial = (color, opacity) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, side: THREE.BackSide, depthWrite: false, blending: THREE.AdditiveBlending });
+      const atmosphereMaterial = (color, opacity) => {
+        const c = new THREE.Color(color);
+        return new THREE.ShaderMaterial({
+          uniforms: { uColor: { value: c }, uOpacity: { value: opacity } },
+          vertexShader: `varying vec3 vNormal; varying vec3 vView; void main(){ vec4 mv=modelViewMatrix*vec4(position,1.0); vNormal=normalize(normalMatrix*normal); vView=normalize(-mv.xyz); gl_Position=projectionMatrix*mv; }`,
+          fragmentShader: `uniform vec3 uColor; uniform float uOpacity; varying vec3 vNormal; varying vec3 vView; void main(){ float rim=pow(1.0-max(dot(vNormal,vView),0.0),2.6); gl_FragColor=vec4(uColor,rim*uOpacity); }`,
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          side: THREE.FrontSide,
+        });
+      };
       const meshes = [];
       let earthClouds = null;
       for (const body of BODIES) {
@@ -806,7 +817,7 @@ void main(){
           texture.minFilter = THREE.LinearMipmapLinearFilter;
         }
         const spec = materialSpec[body.name] || { roughness: .96, metalness: 0 };
-        const material = body.sun ? makeSunMaterial(scene) : new THREE.MeshStandardMaterial({ map: texture, roughness: spec.roughness, metalness: spec.metalness, bumpMap: spec.bump ? texture : null, bumpScale: spec.bump || 0 });
+        const material = body.sun ? makeSunMaterial(scene) : new THREE.MeshStandardMaterial({ map: texture, roughness: spec.roughness, metalness: spec.metalness, bumpMap: spec.bump ? texture : null, bumpScale: spec.bump || 0, emissive: body.name === 'ЗЕМЛЯ' ? 0x0b1b20 : 0x000000, emissiveIntensity: body.name === 'ЗЕМЛЯ' ? .18 : 0 });
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.set(body.x, body.y, body.z); mesh.scale.setScalar(body.r);
         scene.add(mesh); meshes.push(mesh);
@@ -816,7 +827,7 @@ void main(){
           mesh.userData.atmosphere = halo;
         }
         if (body.name === 'ЗЕМЛЯ') {
-          earthClouds = new THREE.Mesh(new THREE.SphereGeometry(1.012, 40, 24), new THREE.MeshStandardMaterial({ map: cloudTexture, transparent: true, opacity: .48, roughness: 1, depthWrite: false }));
+          earthClouds = new THREE.Mesh(new THREE.SphereGeometry(1.012, 40, 24), new THREE.MeshBasicMaterial({ map: cloudTexture, transparent: true, opacity: .3, depthWrite: false, depthTest: true }));
           earthClouds.position.copy(mesh.position); earthClouds.scale.setScalar(body.r); scene.add(earthClouds);
         }
         if (body.ring) {
@@ -1281,7 +1292,7 @@ void main(){
       if (space3d.earthClouds) {
         space3d.earthClouds.position.set(EARTH.x, EARTH.y, EARTH.z);
         space3d.earthClouds.rotation.y = state.t * 0.012;
-        space3d.earthClouds.material.opacity = space3d.quality.level === "economy" ? .28 : .48;
+        space3d.earthClouds.material.opacity = space3d.quality.level === "economy" ? .16 : .3;
       }
       camera.lookAt(cam.pos.x + B.f.x, cam.pos.y + B.f.y, cam.pos.z + B.f.z);
       meshes.forEach((mesh, i) => {
