@@ -397,6 +397,13 @@ button:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
   letter-spacing: .08em;
   text-align: center;
 }
+.quality-state {
+  margin: 4px 20px 0;
+  color: rgba(123, 138, 133, .7);
+  font: 9px "Courier New", monospace;
+  letter-spacing: .12em;
+  text-align: center;
+}
 .result-card {
   display: grid;
   gap: 6px;

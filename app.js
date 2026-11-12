@@ -475,6 +475,7 @@ function spaceScreen() {
         </div>
       </div>
       <div class="signal-state" id="signal-state">СИГНАЛ: ИСТОЧНИК НЕ ОПРЕДЕЛЁН</div>
+      <div class="quality-state" id="quality-state">РЕНДЕР: АВТО</div>
       <div class="hud-row" style="align-items:flex-end">
         <div class="dpad" id="dpad">
           <button class="dbtn" data-th="f" aria-label="вперёд">▲</button>
@@ -565,7 +566,14 @@ function spaceScreen() {
     try {
       const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: 'high-performance' });
       const coarse = matchMedia('(pointer: coarse)').matches;
-      const quality = { dprCap: coarse ? 1.5 : 2, slowFrames: 0, fastFrames: 0, measured: 0 };
+      const quality = {
+        dprCap: coarse ? 1.25 : 2,
+        level: coarse ? "balanced" : "high",
+        slowFrames: 0,
+        fastFrames: 0,
+        measured: 0,
+        emaMs: 16.7,
+      };
       renderer.setPixelRatio(Math.min(devicePixelRatio || 1, quality.dprCap));
       renderer.setSize(stage.clientWidth, stage.clientHeight);
       renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -988,15 +996,34 @@ void main(){
 
   // Адаптивное качество: если кадры идут медленно, снижаем плотность пикселей WebGL.
   // Картинка остаётся той же по композиции, на слабых телефонах без лишней нагрузки.
+  function setQuality(level) {
+    if (!space3d || space3d.quality.level === level) return;
+    const q = space3d.quality;
+    q.level = level;
+    q.dprCap = level === "economy" ? 1 : level === "balanced" ? 1.25 : (matchMedia('(pointer: coarse)').matches ? 1.25 : 2);
+    space3d.renderer.setPixelRatio(Math.min(devicePixelRatio || 1, q.dprCap));
+    if (space3d.starMaterial) space3d.starMaterial.opacity = level === "economy" ? 0.62 : 0.9;
+    space3d.nebulaSprites?.forEach((sprite) => {
+      sprite.material.opacity = sprite.userData.base * (level === "economy" ? 0.55 : level === "balanced" ? 0.72 : 1);
+    });
+    const stateEl = $("#quality-state");
+    if (stateEl) stateEl.textContent = `РЕНДЕР: ${level.toUpperCase()}`;
+  }
   function adaptQuality(dt) {
     const q = space3d.quality;
     q.measured += 1;
     if (q.measured < 30) return;
-    if (dt > 0.028) q.slowFrames++; else q.slowFrames = Math.max(0, q.slowFrames - 1);
-    if (q.slowFrames > 45 && q.dprCap > 1) {
-      q.dprCap = 1; q.slowFrames = 0;
-      space3d.renderer.setPixelRatio(1);
+    q.emaMs = q.emaMs * 0.94 + dt * 1000 * 0.06;
+    if (q.emaMs > 28) {
+      q.slowFrames++;
+      q.fastFrames = 0;
+    } else if (q.emaMs < 19) {
+      q.fastFrames++;
+      q.slowFrames = Math.max(0, q.slowFrames - 1);
     }
+    if (q.slowFrames > 45 && q.level === "high") { setQuality("balanced"); q.slowFrames = 0; }
+    else if (q.slowFrames > 90 && q.level === "balanced") { setQuality("economy"); q.slowFrames = 0; }
+    else if (q.fastFrames > 300 && q.level === "economy") { setQuality("balanced"); q.fastFrames = 0; }
   }
 
   // --- главный цикл ---
