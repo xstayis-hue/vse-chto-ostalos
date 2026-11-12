@@ -374,3 +374,16 @@ button:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
 @media (max-width: 520px) { .archive-title { font-size: 28px; } }
 .archive-last { display: flex; flex-direction: column; gap: 4px; }
 .archive-last-label { font-style: normal; font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: #5a6c66; }
+.memory-choices {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 86px;
+  z-index: 3;
+  display: grid;
+  gap: 10px;
+}
+.memory-choices .row { justify-content: flex-start; flex-wrap: wrap; }
+.memory-choices .button { min-height: 38px; font-size: 11px; }
+.memory-choices .button.selected { border-color: var(--amber); color: var(--amber); }
+.memory-choices .button:disabled { opacity: .9; cursor: default; }

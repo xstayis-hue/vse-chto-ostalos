@@ -121,7 +121,7 @@ const desires = ['вернуться к морю','услышать знаком
 const endings = ['Я ещё успею','Как хорошо, что мы встретились','Я помню этот свет','Ничего страшного','Передай им привет','Пусть будет весна','Я почти вспомнил','Спасибо за всё','Я дома','Завтра будет лучше'];
 const childhood = ['В окне дрожал дождь.','Двор пах после грозы.','На подоконнике стояла чашка.','Первый снег растаял на ладони.','Дома всегда горел свет.','Поезд уходил за горизонт.','Море звучало даже ночью.','На полу лежали цветные карандаши.','Кто-то тихо пел на кухне.','Солнце оставляло полосы на стене.'];
 const middle = ['Однажды пришлось выбирать между домом и дорогой.','Встреча на остановке изменила всё.','Долгие годы проходили спокойно.','Мечта оказалась дальше, чем казалось.','Однажды пришло письмо без обратного адреса.','Рядом оказался человек, которого не ждали.','Работа отнимала время, но давала надежду.','В незнакомом городе появилось чувство дома.','Одно решение сохранилось в памяти навсегда.','Потерянное не всегда удаётся вернуть.'];
-const lifePool = Array.from({length:100}, (_, i) => {
+const generatedLifePool = Array.from({length:100}, (_, i) => {
   const gender = i % 2 ? 'm' : 'f';
   const name = `${firstNames[i % 20]} ${surnames[i % 20]}`;
   const place = places[Math.floor(i / 2) % 10];
@@ -147,6 +147,9 @@ const lifePool = Array.from({length:100}, (_, i) => {
     ] };
 });
 let offeredLives = [];
+const authoredLives = window.CURATED_LIVES || [];
+const lifePool = authoredLives.length ? authoredLives : generatedLifePool;
+const RUN = { choices: {}, signals: [], memories: new Set() };
 function pickLives() {
   const shuffled = [...lifePool];
   for (let i = shuffled.length - 1; i > 0; i--) {
@@ -155,6 +158,9 @@ function pickLives() {
   }
   offeredLives = shuffled.slice(0, 5);
   LIFE = offeredLives[0];
+  RUN.choices = {};
+  RUN.signals = [];
+  RUN.memories = new Set();
 }
 
 // ---------- рендер экранов ----------
@@ -212,6 +218,7 @@ async function chooseScreen() {
 async function memoryScreen(idx) {
   const m = LIFE.memories[idx];
   const total = LIFE.memories.length;
+  const choices = m.choices || [];
   const rain = m.fx === "rain"
     ? Array.from({ length: m.n }, () => `<i style="left:${Math.random() * 100}%;animation-duration:${0.7 + Math.random() * 0.9}s;animation-delay:${Math.random() * 1.2}s"></i>`).join("")
     : "";
@@ -233,11 +240,15 @@ async function memoryScreen(idx) {
           <h2 class="serif" id="cap-h"></h2>
           <p id="cap-p"></p>
         </div>
+        ${choices.length ? `<div class="memory-choices" role="group" aria-label="Выбор воспоминания">
+          <span class="eyebrow">ЧТО ОСТАНЕТСЯ В ПАМЯТИ?</span>
+          <div class="row">${choices.map(c => `<button class="button ghost" data-choice="${c.id}" data-effect="${c.effect}">${c.label}</button>`).join("")}</div>
+        </div>` : ""}
       </div>
       <div class="bar"><i style="width:${((idx + 1) / total) * 100}%"></i></div>
       <div class="scene-foot">
         <span class="faint" style="font-size:10px">${idx + 1 < total ? "память сохраняется неполностью · осталось " + (total - idx - 1) : "последний фрагмент · дальше только тишина"}</span>
-        <button class="button primary" data-go="${idx + 1 < total ? "next" : "death"}">${idx + 1 < total ? "Дальше" : "Продолжить"}</button>
+        <button class="button primary" data-go="${idx + 1 < total ? "next" : "death"}"${choices.length ? " disabled" : ""}>${idx + 1 < total ? "Дальше" : "Продолжить"}</button>
       </div>
     </div>`);
   const heading = $("#cap-h"), description = $("#cap-p");
@@ -1179,6 +1190,20 @@ void main(){
 let memIdx = 0;
 document.addEventListener("click", (e) => {
   if (AudioLayer.ctx?.state === "suspended") AudioLayer.ctx.resume().catch(() => {});
+  const decision = e.target.closest("[data-choice]");
+  if (decision) {
+    const scene = LIFE.memories[memIdx];
+    RUN.choices[memIdx] = decision.dataset.choice;
+    RUN.memories.add(decision.dataset.effect);
+    decision.parentElement.querySelectorAll("[data-choice]").forEach((b) => {
+      b.disabled = true;
+      b.classList.toggle("selected", b === decision);
+    });
+    const advance = stage.querySelector(".scene-foot [data-go]");
+    if (advance) advance.disabled = false;
+    if (scene) scene.selected = decision.dataset.choice;
+    return;
+  }
   const choice = e.target.closest('[data-life]');
   if (choice) { LIFE = lifePool[Number(choice.dataset.life)]; chooseScreen(); return; }
   const go = e.target.closest("[data-go]")?.dataset.go;
