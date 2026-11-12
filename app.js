@@ -203,6 +203,33 @@ function signalBranch() {
   if (hasMemory("quiet")) return "КАНАЛ ОСТАЁТСЯ ПУСТЫМ";
   return "ИСТОЧНИК НЕ ОПРЕДЕЛЁН";
 }
+function branchSignalCopy() {
+  if (hasMemory("voice")) return {
+    code: "VOICE",
+    title: "ГОЛОС В КАНАЛЕ",
+    quote: "Ты меня слышишь?",
+    body: "СИГНАЛ ПОВТОРЯЕТ ТВОЮ ИНТОНАЦИЮ.<br>ОТВЕТ НЕ ОТЛИЧАЕТСЯ ОТ ВОПРОСА.",
+  };
+  if (hasMemory("earth")) return {
+    code: "EARTH",
+    title: "ВОЗВРАТНЫЙ МАРШРУТ",
+    quote: "Дом всё ещё здесь.",
+    body: "КООРДИНАТЫ ВЕДУТ К ЗЕМЛЕ.<br>МАРШРУТ ПОСТРОЕН ИЗ ТЕХ МЕСТ, КОТОРЫХ УЖЕ НЕТ.",
+  };
+  if (hasMemory("distance")) return {
+    code: "DISTANCE",
+    title: "СИГНАЛ ИЗ-ЗА ПРЕДЕЛА",
+    quote: "Не возвращайся.",
+    body: "ИСТОЧНИК УДАЛЯЕТСЯ БЫСТРЕЕ, ЧЕМ ТЫ МОЖЕШЬ К НЕМУ ПРИБЛИЗИТЬСЯ.<br>ПРЕСЛЕДОВАНИЕ ПРИНЯТО.",
+  };
+  if (hasMemory("quiet")) return {
+    code: "QUIET",
+    title: "ОБРЫВ КАНАЛА",
+    quote: "",
+    body: "СИГНАЛ БЫЛ, НО НИЧЕГО НЕ СООБЩИЛ.<br>МОЛЧАНИЕ СОХРАНЕНО КАК ЕДИНСТВЕННЫЙ ФАКТ.",
+  };
+  return { code: "UNKNOWN", title: "СИГНАЛ БЕЗ ВЛАДЕЛЬЦА", quote: "", body: "ИСТОЧНИК НЕ ОПРЕДЕЛЁН.<br>ПОДПИСЬ СОВПАДАЕТ С ТВОЕЙ.", };
+}
 function pickLives() {
   const availableLives = window.CURATED_LIVES?.length ? window.CURATED_LIVES : lifePool;
   const shuffled = [...availableLives];
@@ -1169,24 +1196,30 @@ void main(){
 
   function eventEarthFar() {
     AudioLayer.ping(320, 1.2, 0.08);
+    const branch = branchSignalCopy();
+    RUN.signals.push({ source: "earth-far", branch: branch.code });
+    persistRun();
+    const signalState = $("#signal-state");
+    if (signalState) signalState.textContent = `СИГНАЛ: ${branch.title}`;
     showOverlay({
-      cy: true, title: "Дистанция",
-      body: `ЗЕМЛЯ ПОТЕРЯНА ИЗ ВИДА.<br>ПОВТОРНЫЙ ПОИСК... <b>ОБЪЕКТ НАЙДЕН.</b><br><span style="color:var(--danger)">МАСШТАБ НЕ СОВПАДАЕТ С КАРТОЙ.</span>`,
+      cy: true, title: branch.title,
+      body: `${branch.body}<br><span style="color:var(--danger)">МАСШТАБ НЕ СОВПАДАЕТ С КАРТОЙ.</span>`,
       actions: [["Продолжить", null]],
     });
   }
 
   async function eventMoon() {
     AudioLayer.whisper();
+    const branch = branchSignalCopy();
     RUN.signals.push({ source: "moon", branch: signalBranch() });
     persistRun();
     const signalState = $("#signal-state");
     if (signalState) signalState.textContent = `СИГНАЛ: ${signalBranch()}`;
     const held = hasMemory("memory", "earth");
     const go = await showOverlay({
-      cy: false, title: "Сигнал · источник: Луна",
-      quote: "Ты ещё не вернулся?",
-      body: `${held ? "ГОЛОС ПРИНАДЛЕЖИТ ЖИЗНИ, КОТОРУЮ ТЫ ВЫБРАЛ." : "ГОЛОС НЕ СОВПАДАЕТ С СОХРАНЁННЫМИ ВОСПОМИНАНИЯМИ."}<br>АУДИОЗАПИСЬ: <b>НЕТ</b>. ИСТОЧНИК: <b>НЕТ</b>.`,
+      cy: false, title: `Сигнал · ${branch.title.toLowerCase()}`,
+      quote: branch.quote || "Ты ещё не вернулся?",
+      body: `${branch.body}<br>${held ? "ГОЛОС ПРИНАДЛЕЖИТ ЖИЗНИ, КОТОРУЮ ТЫ ВЫБРАЛ." : "ГОЛОС НЕ СОВПАДАЕТ С СОХРАНЁННЫМИ ВОСПОМИНАНИЯМИ."}<br>АУДИОЗАПИСЬ: <b>НЕТ</b>. ИСТОЧНИК: <b>НЕТ</b>.`,
       actions: [["Записать в память", "keep"], ["Улететь", "leave"]],
     });
     if (go === "keep") {
@@ -1196,6 +1229,7 @@ void main(){
 
   async function eventSignal() {
     AudioLayer.whisper();
+    const branch = branchSignalCopy();
     RUN.signals.push({ source: "deep", branch: signalBranch() });
     persistRun();
     const signalState = $("#signal-state");
@@ -1203,9 +1237,9 @@ void main(){
     const carried = hasMemory("memory", "voice");
     const summary = runSummary();
     const go = await showOverlay({
-      cy: false, title: "Сигнал · дальний",
-      quote: "Ты ещё успеешь?",
-      body: `${carried ? "ПОСЛЕДНЯЯ МЫСЛЬ ОБЪЕКТА ВОЗВРАЩАЕТСЯ ИЗ ТОЧКИ," : "СИГНАЛ ВОЗВРАЩАЕТСЯ БЕЗ ПОСЛЕДНЕЙ МЫСЛИ."}<br>ГДЕ НЕТ НИ ЗЕМЛИ, НИ ЛУНЫ, НИ ТЕБЯ.`,
+      cy: false, title: `Сигнал · ${branch.title.toLowerCase()}`,
+      quote: branch.quote || "Ты ещё успеешь?",
+      body: `${branch.body}<br>${carried ? "ПОСЛЕДНЯЯ МЫСЛЬ ОБЪЕКТА ВОЗВРАЩАЕТСЯ ИЗ ТОЧКИ," : "СИГНАЛ ВОЗВРАЩАЕТСЯ БЕЗ ПОСЛЕДНЕЙ МЫСЛИ."}<br>ГДЕ НЕТ НИ ЗЕМЛИ, НИ ЛУНЫ, НИ ТЕБЯ.`,
       actions: [[summary.answered ? "Ответить сигналу" : "Передать пустой канал", "send"], ["Оставить себе", "keep"]],
     });
     if (go === "send" || go === "keep") ending(go);
