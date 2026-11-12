@@ -1,0 +1,7 @@
+{
+  "name": "vse-chto-ostalos",
+  "private": true,
+  "scripts": {
+    "test": "node --check app.js && node --check content.js && node --check flight.js && node --test flight.test.cjs"
+  }
+}
