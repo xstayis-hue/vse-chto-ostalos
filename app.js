@@ -10,10 +10,9 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 
 // короткий миг/затемнение экрана
-function flashOn(ms = 900) {
+function flashOn() {
   flash.classList.add("on");
   setTimeout(() => flash.classList.remove("on"), 140);
-  setTimeout(() => {}, ms);
 }
 
 // ---------- звук (WebAudio, тихий слой) ----------
@@ -125,9 +124,9 @@ const lifePool = Array.from({length:100}, (_, i) => {
   const last = endings[(i * 7) % 10];
   return { id:i, gender, name, num:`№ ${String(4918220000 + i).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}`, place, year,
     desire, last, memories:[
-      { y:String(year), h:'В день твоего рождения шёл дождь.', p:'Ты никогда не вспомнишь этот свет.', fx:'rain', n:18 },
+      { y:String(year), h: childhood[i % childhood.length], p:'Ты никогда не вспомнишь этот свет.', fx:'rain', n:18 },
       { y:String(year+7), h:'На кухне кто-то тихо пел.', p:'Голос теряется раньше, чем мелодия.', fx:'ice', n:0 },
-      { y:String(year+24), h:'Поезд ушёл без тебя.', p:gender === 'f' ? 'Ты ещё долго стояла на платформе.' : 'Ты ещё долго стоял на платформе.', fx:'split', n:0 },
+      { y:String(year+24), h: middle[(i * 3) % middle.length], p:gender === 'f' ? 'Ты ещё долго стояла на платформе.' : 'Ты ещё долго стоял на платформе.', fx:'split', n:0 },
       { y:String(year+43), h:'Ночью раздался звонок.', p:'Некоторые разговоры продолжаются всю жизнь.', fx:'room', n:0 },
       { y:String(year+68), h:gender === 'f' ? 'Однажды ты увидела море в последний раз.' : 'Однажды ты увидел море в последний раз.', p:gender === 'f' ? 'Ты тогда ещё не знала.' : 'Ты тогда ещё не знал.', fx:'sea', n:0 }
     ] };
@@ -144,7 +143,11 @@ function pickLives() {
 }
 
 // ---------- рендер экранов ----------
-function render(html) { stage.innerHTML = html; }
+let cleanupSpace = null;
+function render(html) {
+  if (cleanupSpace) { cleanupSpace(); cleanupSpace = null; }
+  stage.innerHTML = html;
+}
 
 async function titleScreen() {
   AudioLayer.ensure(); AudioLayer.fade(0.0001, 0.1);
@@ -179,7 +182,7 @@ async function chooseScreen() {
           <div class="field"><span>ГОД РОЖДЕНИЯ</span><b class="mono-digits">${LIFE.year}</b></div>
           <div class="field"><span>ОСНОВНОЕ ЖЕЛАНИЕ</span><b>${LIFE.desire}</b></div>
           <div class="field"><span>СОСТОЯНИЕ</span><b style="color:var(--danger)">НЕ НАЙДЕНО</b></div>
-          <div class="lastline">ПОСЛЕДНЯЯ МЫСЛЬ · ЗАПИСЬ ПОВРЕЖДЕНА</div>
+          <div class="lastline">ПОСЛЕДНЯЯ МЫСЛЬ · «${LIFE.last}» · ЗАПИСЬ ПОВРЕЖДЕНА</div>
         </div>
         <div class="row">
           <button class="button primary" data-go="mem">Прожить эту жизнь <span>↗</span></button>
@@ -192,7 +195,6 @@ async function chooseScreen() {
 async function memoryScreen(idx) {
   const m = LIFE.memories[idx];
   const total = LIFE.memories.length;
-  const extra = m.fx === "rain" ? `<i style="left:${Array.from({length: m.n}, (_, k) => `${(k * 97) % 101}`).join('%;left:')}%"></i>` : "";
   const rain = m.fx === "rain"
     ? Array.from({ length: m.n }, () => `<i style="left:${Math.random() * 100}%;animation-duration:${0.7 + Math.random() * 0.9}s;animation-delay:${Math.random() * 1.2}s"></i>`).join("")
     : "";
@@ -206,7 +208,7 @@ async function memoryScreen(idx) {
         <span class="eyebrow">${LIFE.name}</span>
       </div>
       <div class="scene">
-        <div class="fx ${m.fx}">${rain}${cracks}${extra}</div>
+        <div class="fx ${m.fx}">${rain}${cracks}</div>
         ${m.fx === "room" ? '<div class="fx phone"></div>' : ""}
         <div class="caption">
           <div class="yeartag">${m.y}</div>
@@ -216,7 +218,7 @@ async function memoryScreen(idx) {
       </div>
       <div class="bar"><i style="width:${((idx + 1) / total) * 100}%"></i></div>
       <div class="scene-foot">
-        <span class="faint" style="font-size:10px">память сохраняется неполностью</span>
+        <span class="faint" style="font-size:10px">${idx + 1 < total ? "память сохраняется неполностью · осталось " + (total - idx - 1) : "последний фрагмент · дальше только тишина"}</span>
         <button class="button primary" data-go="${idx + 1 < total ? "next" : "death"}">${idx + 1 < total ? "Дальше" : "Продолжить"}</button>
       </div>
     </div>`);
@@ -248,6 +250,7 @@ async function deathScreen() {
           <div class="yeartag" style="color:#3c4a45">СЕРДЦЕБИЕНИЕ: НЕ ОБНАРУЖЕНО</div>
           <h2 class="serif" id="death-h"></h2>
           <p id="death-p" style="color:#39443f"></p>
+          <p class="death-tail" id="death-t" style="color:#39443f"></p>
         </div>
       </div>
       <div class="scene-foot">
@@ -256,7 +259,16 @@ async function deathScreen() {
       </div>
     </div>`);
   await typeText($("#death-h"), LIFE.gender === 'f' ? "Ты умерла." : "Ты умер.", 90);
-  await typeText($("#death-p"), "Это не было похоже на конец.", 40);
+  await pause(1600);
+  if (!$("#death-p")) return;
+  await typeText($("#death-p"), "Это не было похоже на конец.", 60);
+  await pause(2400);
+  if (!$("#death-t")) return;
+  await typeText($("#death-t"), "Отсчёт времени не ведётся. Ожидание не имеет границ.", 40);
+}
+
+function pause(ms) {
+  return new Promise((done) => setTimeout(done, ms));
 }
 
 // ============================================================
@@ -275,7 +287,7 @@ function spaceScreen() {
         <div class="panel" style="text-align:right">
           <div class="eyebrow">навигация</div>
           <p>ДО ЗЕМЛИ: <b id="d-earth">—</b></p>
-          <p>ДО СОЛНЦА: <b id="d-moon">—</b></p>
+          <p>ДО СОЛНЦА: <b id="d-sun">—</b></p>
           <p>БЛИЖЕЙШИЙ: <b id="d-near">—</b></p>
           <p>СКОРОСТЬ: <b id="v-now">0.00</b></p>
         </div>
@@ -287,7 +299,7 @@ function spaceScreen() {
           <button class="dbtn" data-th="b" aria-label="назад">▼</button>
           <button class="dbtn" data-th="r" aria-label="вправо">▶</button>
         </div>
-        <div class="stick" id="stick" aria-label="тяга"><i></i></div>
+        <div class="stick" id="stick" role="group" aria-label="тяга"><i></i></div>
         <div class="keys">
           <button class="button" id="k-scan">Сканировать</button>
           <button class="button ghost" id="k-slow">Стоп</button>
@@ -367,13 +379,15 @@ function spaceScreen() {
   if (window.THREE) {
     try {
       const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: 'high-performance' });
-      renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+      const coarse = matchMedia('(pointer: coarse)').matches;
+      const quality = { dprCap: coarse ? 1.5 : 2, slowFrames: 0, fastFrames: 0, measured: 0 };
+      renderer.setPixelRatio(Math.min(devicePixelRatio || 1, quality.dprCap));
       renderer.setSize(stage.clientWidth, stage.clientHeight);
       renderer.outputColorSpace = THREE.SRGBColorSpace;
       renderer.domElement.className = 'space-webgl';
-      canvas.insertAdjacentElement('afterend', renderer.domElement);
+      canvas.insertAdjacentElement('beforebegin', renderer.domElement);
       const scene = new THREE.Scene();
-      const sky = new THREE.TextureLoader().load('assets/milky-way-8k.jpg');
+      const sky = new THREE.TextureLoader().load('assets/milky-way-4k.jpg');
       sky.mapping = THREE.EquirectangularReflectionMapping;
       sky.colorSpace = THREE.SRGBColorSpace;
       sky.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
@@ -423,12 +437,21 @@ function spaceScreen() {
           const py = ((seed * 53 + i * 311) % 1000) / 1000 * c.height;
           const rx = 55 + ((seed + i * 41) % 150), ry = 25 + ((seed + i * 23) % 90);
           const g = x.createRadialGradient(px, py, 0, px, py, Math.max(rx, ry));
-          g.addColorStop(0, `hsla(${hue},72%,64%,${0.12 + (i % 4) * 0.025})`);
-          g.addColorStop(.38, `hsla(${hue + 18},68%,45%,${0.06 + (i % 3) * 0.018})`);
-          g.addColorStop(1, `hsla(${hue + 30},60%,25%,0)`);
+          g.addColorStop(0, `hsla(${hue},34%,58%,${0.12 + (i % 4) * 0.025})`);
+          g.addColorStop(.38, `hsla(${hue + 14},30%,42%,${0.06 + (i % 3) * 0.018})`);
+          g.addColorStop(1, `hsla(${hue + 24},26%,24%,0)`);
           x.save(); x.translate(px, py); x.scale(1, ry / rx); x.translate(-px, -py);
-          x.fillStyle = g; x.fillRect(px - rx, py - rx, rx * 2, rx * 2); x.restore();
+          const m = Math.max(rx, ry);
+          x.fillStyle = g; x.fillRect(px - m, py - m, m * 2, m * 2); x.restore();
         }
+        x.globalCompositeOperation = 'destination-in';
+        const edge = x.createRadialGradient(c.width / 2, c.height / 2, 0, c.width / 2, c.height / 2, c.height * 0.5);
+        edge.addColorStop(0, 'rgba(0,0,0,1)');
+        edge.addColorStop(0.55, 'rgba(0,0,0,0.75)');
+        edge.addColorStop(0.85, 'rgba(0,0,0,0.2)');
+        edge.addColorStop(1, 'rgba(0,0,0,0)');
+        x.fillStyle = edge; x.fillRect(0, 0, c.width, c.height);
+        x.globalCompositeOperation = 'source-over';
         const texture = new THREE.CanvasTexture(c);
         texture.colorSpace = THREE.SRGBColorSpace;
         return texture;
@@ -436,10 +459,10 @@ function spaceScreen() {
       const nebulaGroup = new THREE.Group();
       const nebulaDefs = [
         { p: [-560, 110, -720], s: [720, 420], hue: 205, opacity: .72, seed: 3 },
-        { p: [390, -120, -860], s: [620, 360], hue: 285, opacity: .52, seed: 9 },
+        { p: [390, -120, -860], s: [620, 360], hue: 215, opacity: .52, seed: 9 },
         { p: [-850, 310, 180], s: [540, 300], hue: 178, opacity: .43, seed: 17 },
         { p: [720, 260, 520], s: [650, 360], hue: 32, opacity: .32, seed: 25 },
-        { p: [0, -420, -1050], s: [900, 300], hue: 224, opacity: .35, seed: 31 }
+        { p: [0, -420, -1050], s: [900, 300], hue: 210, opacity: .35, seed: 31 }
       ];
       const nebulaSprites = nebulaDefs.map((n, i) => {
         const material = new THREE.SpriteMaterial({ map: nebulaTexture(n.hue, n.seed), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: n.opacity, color: 0xffffff });
@@ -469,7 +492,7 @@ function spaceScreen() {
           mesh.userData.orbitalRings = rings;
         }
       }
-      space3d = { renderer, scene, camera, meshes, starField, starMaterial, nebulaGroup, nebulaSprites };
+      space3d = { renderer, scene, camera, meshes, starField, starMaterial, nebulaGroup, nebulaSprites, quality };
     } catch (error) { console.warn('WebGL недоступен; используется резервный рендер', error); }
   }
 
@@ -488,13 +511,14 @@ function spaceScreen() {
     return { x, y: y0 / n, z: z / n, m: 0.12 + Math.random() * 0.3 };
   });
 
-  const state = { dead: false, raf: 0, t: 0, thrust: { x: 0, y: 0 }, events: { earth: false, moon: false, far: false }, scanT: 0 };
+  const state = { dead: false, raf: 0, t: 0, last: 0, thrust: { x: 0, y: 0 }, events: { earth: false, moon: false, far: false }, scanT: 0 };
 
   function resize() {
     DPR = Math.min(devicePixelRatio || 1, 2);
     W = stage.clientWidth; H = stage.clientHeight;
-    canvas.width = W * DPR; canvas.height = H * DPR;
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    const cDPR = space3d ? 1 : DPR; // при WebGL 2D-слой нужен только для мелких точек
+    canvas.width = W * cDPR; canvas.height = H * cDPR;
+    ctx.setTransform(cDPR, 0, 0, cDPR, 0, 0);
   }
   resize();
   addEventListener("resize", resize);
@@ -683,10 +707,27 @@ function spaceScreen() {
     for (const it of arr) draw(it.o, it.pr, f);
   }
 
+  // Адаптивное качество: если кадры идут медленно, снижаем плотность пикселей WebGL.
+  // Картинка остаётся той же по композиции, на слабых телефонах без лишней нагрузки.
+  function adaptQuality(dt) {
+    const q = space3d.quality;
+    q.measured += 1;
+    if (q.measured < 30) return;
+    if (dt > 0.028) q.slowFrames++; else q.slowFrames = Math.max(0, q.slowFrames - 1);
+    if (q.slowFrames > 45 && q.dprCap > 1) {
+      q.dprCap = 1; q.slowFrames = 0;
+      space3d.renderer.setPixelRatio(1);
+    }
+  }
+
   // --- главный цикл ---
   function frame() {
-    if (state.dead) return;
-    state.t += 1 / 60;
+    if (state.dead || document.hidden) { state.raf = 0; return; }
+    const now = performance.now();
+    const dt = state.last ? Math.min(0.05, (now - state.last) / 1000) : 1 / 60;
+    state.last = now;
+    state.t += dt;
+    if (space3d) adaptQuality(dt);
     for (const orbit of orbiting) {
       const angle = orbit.angle + state.t * orbit.speed;
       orbit.body.x = Math.cos(angle) * orbit.radius;
@@ -701,15 +742,19 @@ function spaceScreen() {
 
     // физика полёта: тяга по направлению взгляда + дрейф (дистанции реальные — тяга высокая)
     const accel = 28;
-    cam.vel.x += (B.f.x * state.thrust.y + B.r.x * state.thrust.x) * accel / 60;
-    cam.vel.y += (B.f.y * state.thrust.y + B.r.y * state.thrust.x) * accel / 60;
-    cam.vel.z += (B.f.z * state.thrust.y + B.r.z * state.thrust.x) * accel / 60;
-    cam.vel.x *= 0.985; cam.vel.y *= 0.985; cam.vel.z *= 0.985; // инерция/затухание
-    cam.pos.x += cam.vel.x / 60; cam.pos.y += cam.vel.y / 60; cam.pos.z += cam.vel.z / 60;
+    cam.vel.x += (B.f.x * state.thrust.y + B.r.x * state.thrust.x) * accel * dt;
+    cam.vel.y += (B.f.y * state.thrust.y + B.r.y * state.thrust.x) * accel * dt;
+    cam.vel.z += (B.f.z * state.thrust.y + B.r.z * state.thrust.x) * accel * dt;
+    const damp = Math.pow(0.985, dt * 60); // инерция/затухание, не зависит от FPS
+    cam.vel.x *= damp; cam.vel.y *= damp; cam.vel.z *= damp;
+    cam.pos.x += cam.vel.x * dt; cam.pos.y += cam.vel.y * dt; cam.pos.z += cam.vel.z * dt;
 
-    // фон: глубокая пустота
-    ctx.fillStyle = "#020408";
-    ctx.fillRect(0, 0, W, H);
+    // фон: при WebGL небо рисует three.js, 2D-слой прозрачный
+    ctx.clearRect(0, 0, W, H);
+    if (!space3d) {
+      ctx.fillStyle = "#020408";
+      ctx.fillRect(0, 0, W, H);
+    }
 
     // звёзды и пыль: точки на единичной сфере, повёрнутой камерой
     const f = (W / 2) / Math.tan(FOV / 2);
@@ -725,8 +770,10 @@ function spaceScreen() {
       }
       ctx.globalAlpha = 1;
     }
-    skyPts(DUST, 1.6, (s) => "rgba(140,165,180,0.5)");
-    skyPts(STARS, 1.9, (s) => s.c < 0.12 ? "rgba(180,200,235,0.9)" : s.c < 0.24 ? "rgba(230,210,180,0.9)" : "rgba(210,225,222,0.9)");
+    if (!space3d) {
+      skyPts(DUST, 1.6, (s) => "rgba(140,165,180,0.5)");
+      skyPts(STARS, 1.9, (s) => s.c < 0.12 ? "rgba(180,200,235,0.9)" : s.c < 0.24 ? "rgba(230,210,180,0.9)" : "rgba(210,225,222,0.9)");
+    }
 
     // все тела системы: рисуем по глубине (дальние — первыми)
     let nearest = { name: "—", d: Infinity };
@@ -808,11 +855,10 @@ function spaceScreen() {
 
     // HUD-дистанции
     const dE = Math.hypot(cam.pos.x - EARTH.x, cam.pos.y - EARTH.y, cam.pos.z - EARTH.z) - EARTH.r;
-    const dM = Math.hypot(cam.pos.x - MOON.x, cam.pos.y - MOON.y, cam.pos.z - MOON.z) - MOON.r;
     const dS = Math.hypot(cam.pos.x, cam.pos.y, cam.pos.z) - SUN.r;
     const v = Math.hypot(cam.vel.x, cam.vel.y, cam.vel.z);
     $("#d-earth").textContent = dE.toFixed(1) + " R";
-    $("#d-moon").textContent = dS.toFixed(1) + " R (СОЛНЦЕ)";
+    $("#d-sun").textContent = dS.toFixed(1) + " R";
     $("#v-now").textContent = v.toFixed(1);
     const nearEl = $("#d-near");
     if (nearEl) nearEl.textContent = `${nearest.name} · ${nearest.d.toFixed(1)} R`;
@@ -956,7 +1002,7 @@ function spaceScreen() {
   function toast(html) {
     const host = $("#overlay-host");
     const el = document.createElement("div");
-    el.className = "overlay"; el.style.background = "transparent"; el.style.backdropFilter = "none";
+    el.className = "overlay"; el.style.background = "transparent"; el.style.backdropFilter = "none"; el.style.pointerEvents = "none";
     el.innerHTML = `<div class="card cy" style="border-color:rgba(143,209,194,.35)"><div class="system">${html}</div></div>`;
     host.appendChild(el);
     setTimeout(() => el.remove(), 2600);
@@ -983,6 +1029,20 @@ function spaceScreen() {
 
   // скрыть подсказку через 6с
   setTimeout(() => { const h = $("#hint"); if (h) { h.style.opacity = "0"; h.style.transition = "opacity 1.2s"; } }, 6000);
+
+  const onVisible = () => { if (!document.hidden && !state.dead && !state.raf) { state.last = 0; state.raf = requestAnimationFrame(frame); } };
+  document.addEventListener("visibilitychange", onVisible);
+  cleanupSpace = () => {
+    state.dead = true; cancelAnimationFrame(state.raf);
+    removeEventListener("resize", resize);
+    document.removeEventListener("visibilitychange", onVisible);
+    removeEventListener("keydown", onKD); removeEventListener("keyup", onKU);
+    if (space3d) {
+      space3d.scene.traverse((o) => { o.geometry?.dispose(); o.material?.map?.dispose(); o.material?.dispose(); });
+      space3d.renderer.dispose();
+      space3d.renderer.forceContextLoss();
+    }
+  };
 
   frame();
 }

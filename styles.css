@@ -2,7 +2,7 @@
   color-scheme: dark;
   --ink: #cfd9d6;
   --muted: #6e7d79;
-  --dim: #37423f;
+  --dim: #7b8a85;
   --line: rgba(158, 190, 181, 0.18);
   --cyan: #8fd1c2;
   --amber: #c9a86a;
@@ -29,7 +29,6 @@ button:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
 .serif { font-family: Georgia, "Times New Roman", serif; font-weight: 400; }
 .eyebrow { color: var(--dim); font-size: 10px; letter-spacing: .22em; text-transform: uppercase; }
 .system { color: var(--cyan); font-size: 11px; letter-spacing: .1em; line-height: 1.9; opacity: .85; }
-.system.danger { color: var(--danger); }
 .faint { color: var(--muted); font-size: 11px; line-height: 1.8; }
 
 /* ---------- кнопки ---------- */
@@ -41,7 +40,6 @@ button:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
 .button:active { transform: translateY(1px) scale(.985); }
 .button.primary { border-color: rgba(143,209,194,.55); color: #dff5ee; }
 .button.ghost { color: var(--muted); border-color: transparent; }
-.button.wide { width: 100%; }
 
 /* ---------- титул ---------- */
 .screen { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; }
@@ -52,8 +50,6 @@ button:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
   transform: skewX(-6deg); text-shadow: 1px 0 var(--danger), -1px 0 rgba(255,255,255,.35); }
 .title .ost::before { content: attr(data-t); position: absolute; left: 2px; top: 0; color: var(--danger); opacity: .5; clip-path: inset(20% 0 55% 0); animation: sliceA 3.1s steps(1) infinite; }
 .title .ost::after { content: attr(data-t); position: absolute; left: -2px; top: 0; color: #e8efe9; opacity: .4; clip-path: inset(62% 0 8% 0); animation: sliceB 2.7s steps(1) infinite; }
-.title-meta { display: flex; justify-content: space-between; gap: 8px; color: var(--dim); font-size: 10px; letter-spacing: .14em; margin: 26px 0 0; }
-.title-meta span:last-child { animation: clockblink 2s steps(1) infinite; }
 .start-row { margin-top: 44px; display: grid; gap: 10px; justify-items: center; }
 
 /* ---------- архив / выбор жизни ---------- */
@@ -82,7 +78,6 @@ button:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
 .fx { position: absolute; inset: 0; z-index: 1; }
 .fx.rain { background: linear-gradient(180deg, #0b1013, #05080a); }
 .fx.rain i { position: absolute; top: -12%; width: 1px; height: 14%; background: linear-gradient(180deg, transparent, rgba(170,200,195,.28)); animation: fall linear infinite; }
-.fx.light { background: radial-gradient(circle at 50% 42%, rgba(235,245,240,.95), rgba(160,180,175,.25) 34%, #05080a 78%); animation: breathe 6s ease-in-out infinite; }
 .fx.ice { background: linear-gradient(160deg, #0a141a 0%, #071118 60%, #04090c 100%); }
 .fx.ice i { position: absolute; background: linear-gradient(90deg, transparent, rgba(150,210,200,.5), transparent); height: 1px; transform-origin: left center; animation: crack 2.8s cubic-bezier(.23,1,.32,1) forwards; }
 .fx.split { background: linear-gradient(105deg, #0a1013 49.7%, rgba(143,209,194,.16) 49.7%, rgba(143,209,194,.16) 50.3%, #05080a 50.3%); }
@@ -108,7 +103,6 @@ button:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
 .panel .eyebrow { margin-bottom: 4px; }
 .panel p { margin: 2px 0 0; font-size: 10px; color: var(--muted); letter-spacing: .08em; }
 .panel p b { color: var(--cyan); font-weight: 400; }
-.controls { display: flex; align-items: flex-end; gap: 10px; pointer-events: auto; }
 .dpad { display: grid; grid-template-columns: repeat(3, 52px); grid-template-rows: repeat(2, 46px); gap: 6px; pointer-events: auto; }
 .dpad .dbtn { border: 1px solid rgba(158,190,181,.25); background: rgba(8,14,16,.35); color: rgba(190,210,205,.75);
   font-size: 13px; backdrop-filter: blur(3px); border-radius: 6px; user-select: none; -webkit-user-select: none; touch-action: none;
@@ -119,9 +113,9 @@ button:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
 .dpad .dbtn:nth-child(2) { grid-column: 1; grid-row: 2; }
 .dpad .dbtn:nth-child(3) { grid-column: 2; grid-row: 2; }
 .dpad .dbtn:nth-child(4) { grid-column: 3; grid-row: 2; }
-.stick { position: relative; width: 96px; height: 96px; border: 1px solid var(--line); border-radius: 50%; background: rgba(4, 8, 10, .5); backdrop-filter: blur(4px); touch-action: none; }
+.stick { position: relative; width: 96px; height: 96px; border: 1px solid var(--line); border-radius: 50%; background: rgba(4, 8, 10, .5); backdrop-filter: blur(4px); touch-action: none; pointer-events: auto; }
 .stick i { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px 0 0 -15px; border: 1px solid rgba(143,209,194,.8); border-radius: 50%; background: rgba(143,209,194,.08); transition: transform .08s linear; }
-.keys { display: grid; gap: 8px; }
+.keys { display: grid; gap: 8px; pointer-events: auto; }
 .keys .button { min-height: 42px; min-width: 76px; padding: 8px 12px; }
 .hint { position: absolute; left: 50%; bottom: calc(120px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 11; color: var(--dim); font-size: 10px; letter-spacing: .16em; pointer-events: none; white-space: nowrap; }
 
@@ -183,7 +177,6 @@ button:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
 .life-card h2 { font-size: clamp(34px, 5vw, 56px); margin: 16px 0; }
 .life-card h2 span { color: #94aaa1; }
 .life-count { line-height: 1.8; max-width: 440px; }
-.archive-note { align-self: center; color: var(--dim); font-size: 9px; letter-spacing: .12em; }
 .life-options { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 6px; margin: 20px 0; }
 .life-option { text-align: left; min-width: 0; min-height: 76px; padding: 10px; border: 1px solid var(--line); background: rgba(16,25,25,.65); }
 .life-option span, .life-option small { display: block; overflow-wrap: anywhere; }
@@ -198,7 +191,14 @@ button:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
 .fx.split { background: url('assets/memory-choice.jpg') center / cover no-repeat, #0a1013; }
 .fx.room { background: url('assets/memory-life.jpg') center / cover no-repeat, #07090b; }
 .fx.sea { background: url('assets/memory-farewell.jpg') center / cover no-repeat, #10171a; }
-.fx.rain i, .fx.ice i, .fx.phone, .fx.sea::after { display: none; }
+.death-stage .scene .caption p { max-width: 420px; }
+.death-tail { margin-top: 18px !important; font-size: 11px !important; letter-spacing: .08em; opacity: .75; min-height: 2.2em; }
+.title .ost::before, .title .ost::after { animation-duration: 6s !important; opacity: .22 !important; }
+.title-description { letter-spacing: .02em; }
+.departure { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .death-tail { opacity: 1; }
+}
 .scene .fx.rain, .scene .fx.ice, .scene .fx.split, .scene .fx.room, .scene .fx.sea {
   transform: scale(1.07);
   animation: memory-camera 6s cubic-bezier(.23,1,.32,1) both;
