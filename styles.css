@@ -407,3 +407,4 @@ button:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
 }
 .result-card span, .result-card small { color: var(--dim); font: 10px var(--mono, monospace); }
 .result-card b { color: var(--paper); font-weight: 500; }
+.result-card + .row { max-width: 420px; margin-left: auto; margin-right: auto; }

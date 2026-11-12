@@ -196,6 +196,44 @@ function runSummary() {
     answered: RUN.memories.has("voice"),
   };
 }
+function resultText() {
+  const summary = runSummary();
+  const branch = signalBranch();
+  return `Я прожил жизнь ${LIFE.name} в «Всё, что от меня ОСТАЛОСЬ». В памяти осталось: ${summary.retained} фрагм. Ветка сигнала: ${branch}.`;
+}
+function resultCardData() {
+  const summary = runSummary();
+  return {
+    name: LIFE.name,
+    symbol: LIFE.symbol || "след не определён",
+    branch: signalBranch(),
+    retained: summary.retained,
+    choices: Object.values(RUN.choices).join(" · ") || "—",
+  };
+}
+function drawResultCard() {
+  const data = resultCardData();
+  const canvas = document.createElement("canvas");
+  canvas.width = 1200; canvas.height = 630;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#030507"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = "#536b62"; ctx.lineWidth = 2; ctx.strokeRect(34, 34, 1132, 562);
+  ctx.fillStyle = "#7f9089"; ctx.font = "20px monospace"; ctx.fillText("АРХИВ · ПОСЛЕ ЧЕЛОВЕКА", 80, 100);
+  ctx.fillStyle = "#d5e0d9"; ctx.font = "italic 58px Georgia"; ctx.fillText("Всё, что от меня", 80, 210);
+  ctx.fillStyle = "#9fb4aa"; ctx.font = "bold 70px Arial"; ctx.fillText("ОСТАЛОСЬ", 80, 290);
+  ctx.fillStyle = "#9fb4aa"; ctx.font = "28px monospace"; ctx.fillText(data.name, 80, 390);
+  ctx.fillStyle = "#71847b"; ctx.font = "22px monospace"; ctx.fillText(`${data.symbol} · ${data.retained} фрагм.`, 80, 440);
+  ctx.fillText(data.branch, 80, 490);
+  ctx.fillStyle = "#536b62"; ctx.font = "18px monospace"; ctx.fillText("ЗАПИСЬ НЕ ПРИНАДЛЕЖИТ НИКОМУ", 80, 550);
+  return canvas;
+}
+function downloadResultCard() {
+  const canvas = drawResultCard();
+  const link = document.createElement("a");
+  link.download = "vse-chto-ostalos-result.png";
+  link.href = canvas.toDataURL("image/png");
+  link.click();
+}
 function signalBranch() {
   if (hasMemory("voice")) return "ГОЛОС ОТВЕЧАЕТ ТЕБЕ";
   if (hasMemory("earth")) return "СИГНАЛ НАПРАВЛЕН К ЗЕМЛЕ";
@@ -1282,6 +1320,7 @@ void main(){
             <button class="button primary" data-go="restart">Начать снова</button>
             <button class="button ghost" data-go="title">Закрыть архив</button>
             <button class="button ghost" data-share>Поделиться результатом</button>
+            <button class="button ghost" data-card>Сохранить карточку</button>
           </div>
         </div>
       </div>`);
@@ -1328,10 +1367,14 @@ document.addEventListener("click", (e) => {
     return;
   }
   if (e.target.closest("[data-share]")) {
-    const summary = runSummary();
-    const text = `Я прожил жизнь ${LIFE.name} в «Всё, что от меня ОСТАЛОСЬ». Сохранено фрагментов: ${summary.retained}.`;
-    if (navigator.share) navigator.share({ title: "Всё, что от меня ОСТАЛОСЬ", text }).catch(() => {});
+    const text = resultText();
+    if (TG?.switchInlineQuery) TG.switchInlineQuery(text, ["users", "groups", "channels"]);
+    else if (navigator.share) navigator.share({ title: "Всё, что от меня ОСТАЛОСЬ", text }).catch(() => {});
     else navigator.clipboard?.writeText(text).then(() => alert("Результат скопирован"), () => {});
+    return;
+  }
+  if (e.target.closest("[data-card]")) {
+    downloadResultCard();
     return;
   }
   const choice = e.target.closest('[data-life]');
