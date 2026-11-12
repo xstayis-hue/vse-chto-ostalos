@@ -725,11 +725,11 @@ function spaceScreen() {
       const camera = new THREE.PerspectiveCamera(55, stage.clientWidth / stage.clientHeight, 0.03, 5000);
       const geometry = new THREE.SphereGeometry(1, 64, 40);
       const sunShader = { uniforms: { uTime: { value: 0 } } };
-      const makeSunMaterial = (sceneRef) => {
- const mat = new THREE.ShaderMaterial({
-   uniforms: sunShader.uniforms,
-   vertexShader: `varying vec3 vN; varying vec3 vP; void main(){ vN = normalize(normalMatrix * normal); vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-   fragmentShader: `uniform float uTime; varying vec3 vN; varying vec3 vP;
+      const makeSunMaterial = (sceneRef, surfaceTexture) => {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { ...sunShader.uniforms, uSurface: { value: surfaceTexture } },
+    vertexShader: `varying vec3 vN; varying vec3 vP; varying vec2 vUv; void main(){ vN = normalize(normalMatrix * normal); vP = position; vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `uniform float uTime; uniform sampler2D uSurface; varying vec3 vN; varying vec3 vP; varying vec2 vUv;
 float hash(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
 float noise(vec3 p){ vec3 i = floor(p); vec3 f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(mix(hash(i), hash(i + vec3(1,0,0)), f.x), mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
@@ -744,8 +744,10 @@ void main(){
   vec3 dark = vec3(0.55, 0.14, 0.03);
   vec3 mid = vec3(1.0, 0.55, 0.12);
   vec3 hot = vec3(1.0, 0.92, 0.5);
-  vec3 col = mix(dark, mid, smoothstep(0.3, 0.55, n));
-  col = mix(col, hot, smoothstep(0.5, 0.78, n));
+   vec3 procedural = mix(dark, mid, smoothstep(0.3, 0.55, n));
+   procedural = mix(procedural, hot, smoothstep(0.5, 0.78, n));
+   vec3 source = texture2D(uSurface, vUv + vec2(uTime * 0.004, 0.0)).rgb;
+   vec3 col = mix(procedural, source * vec3(1.15, 0.86, 0.42), 0.64);
   col *= 0.84 + 0.24 * smoothstep(0.25, 0.75, n);
   float mu = clamp(vN.z, 0.0, 1.0);
   col *= mix(0.75, 1.1, pow(mu, 0.4));
@@ -781,7 +783,7 @@ void main(){
       };
       const meshes = [];
       for (const body of BODIES) {
-        const texture = body.sun ? null : loader.load(`assets/${names[body.name]}.jpg`);
+        const texture = body.sun ? loader.load('assets/sun-api-candidate.png') : loader.load(`assets/${names[body.name]}.jpg`);
         if (texture) {
           texture.colorSpace = THREE.SRGBColorSpace;
           texture.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
@@ -789,7 +791,7 @@ void main(){
           texture.minFilter = THREE.LinearMipmapLinearFilter;
         }
         const spec = materialSpec[body.name] || { roughness: .96, metalness: 0 };
-        const material = body.sun ? makeSunMaterial(scene) : new THREE.MeshStandardMaterial({ map: texture, roughness: spec.roughness, metalness: spec.metalness, bumpMap: spec.bump ? texture : null, bumpScale: spec.bump || 0 });
+        const material = body.sun ? makeSunMaterial(scene, texture) : new THREE.MeshStandardMaterial({ map: texture, roughness: spec.roughness, metalness: spec.metalness, bumpMap: spec.bump ? texture : null, bumpScale: spec.bump || 0 });
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.set(body.x, body.y, body.z); mesh.scale.setScalar(body.r);
         scene.add(mesh); meshes.push(mesh);
