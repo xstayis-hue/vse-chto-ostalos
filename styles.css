@@ -412,6 +412,23 @@ button:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
   letter-spacing: .12em;
   text-align: center;
 }
+.memory-quiet { opacity: .72; }
+.navigation-panel { display: none; }
+.signal-state {
+  align-self: center;
+  width: min(360px, calc(100% - 72px));
+  border-color: rgba(143, 209, 194, .12);
+  color: rgba(143, 209, 194, .55);
+  opacity: 0;
+  transition: opacity 1.8s ease, border-color 1.8s ease;
+}
+.signal-state:not(:empty) { opacity: 1; }
+.calm-controls .button { opacity: .42; transition: opacity 1s ease, border-color .3s, color .3s; }
+.calm-controls:hover .button, .calm-controls:focus-within .button { opacity: .9; }
+.quality-state, .expedition-state { display: none; }
+.hint { opacity: .28; transition: opacity 1.2s ease; }
+.hud { opacity: .72; transition: opacity 2s ease; }
+.hud:hover, .hud:focus-within { opacity: 1; }
 .result-card {
   display: grid;
   gap: 6px;

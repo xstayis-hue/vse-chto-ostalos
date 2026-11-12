@@ -499,10 +499,9 @@ function spaceScreen() {
         <div class="panel">
           <div class="eyebrow">объект · ${LIFE.name}</div>
           <p>СОСТОЯНИЕ: <b>ПОСЛЕ</b></p>
-          <p>ПАМЯТЬ: <b>${LIFE.memories.length} ФРАГМЕНТА</b></p>
-          <p class="compact-navigation">ДО СОЛНЦА: <b id="d-sun-compact">—</b></p>
+          <p class="memory-quiet">ПАМЯТЬ: <b>${LIFE.memories.length} ФРАГМЕНТА</b></p>
         </div>
-        <div class="panel" style="text-align:right">
+        <div class="panel navigation-panel" style="text-align:right">
           <div class="eyebrow">навигация</div>
           <p>ДО ЗЕМЛИ: <b id="d-earth">—</b></p>
           <p>ДО СОЛНЦА: <b id="d-sun">—</b></p>
@@ -510,9 +509,7 @@ function spaceScreen() {
           <p>СКОРОСТЬ: <b id="v-now">0.00</b></p>
         </div>
       </div>
-      <div class="signal-state" id="signal-state">СИГНАЛ: ИСТОЧНИК НЕ ОПРЕДЕЛЁН</div>
-      <div class="quality-state" id="quality-state">РЕНДЕР: АВТО</div>
-      <div class="expedition-state" id="expedition-state">ЭКСПЕДИЦИЙ: 0 / 3</div>
+      <div class="signal-state" id="signal-state" aria-live="polite"></div>
       <div class="hud-row" style="align-items:flex-end">
         <div class="dpad" id="dpad">
           <button class="dbtn" data-th="f" aria-label="вперёд">▲</button>
@@ -522,12 +519,12 @@ function spaceScreen() {
         </div>
         <div class="stick" id="stick" role="group" aria-label="тяга"><i></i></div>
         <div class="keys">
-          <button class="button" id="k-scan">Сканировать</button>
-          <button class="button ghost" id="k-slow">Стоп</button>
+          <button class="button" id="k-scan">Наблюдать</button>
+          <button class="button ghost" id="k-slow">Покой</button>
         </div>
       </div>
     </div>
-    <div class="hint" id="hint">МЫШЬ — ВЗГЛЯД · WASD / КНОПКИ — ТЯГА · НА МОБИЛЬНОМ: СВАЙП И ДЖОЙСТИК</div>
+    <div class="hint" id="hint">СВАЙП — ВЗГЛЯД · ДЖОЙСТИК — ДВИЖЕНИЕ</div>
     <div id="overlay-host"></div>`);
 
   AudioLayer.ensure();
@@ -547,7 +544,7 @@ function spaceScreen() {
   // 1 а.е. = 120 R⊕. Игрок стартует у Земли (дистанция 120 от Солнца), видит его прямо перед собой.
   const AU = 120;
   const ORB = (a, ang) => ({ x: Math.cos(ang) * a * AU, z: Math.sin(ang) * a * AU });
-  const SUN = { name: "СОЛНЦЕ", x: 0, y: 0, z: 0, r: 18, sun: true, marks: [],
+  const SUN = { name: "СОЛНЦЕ", x: 0, y: 0, z: 0, r: 12, sun: true, marks: [],
     hi: "rgba(255,252,240,1)", mid: "rgba(255,236,180,1)", lo: "rgba(255,205,110,1)", night: "#ffb050",
     line: "СОЛНЦЕ · ВБЛИЗИ ОНО СЛИШКОМ БОЛЬШОЕ. СИСТЕМА НЕ МОЖЕТ ОПРЕДЕЛИТЬ, ГДЕ ЗАКАНЧИВАЕТСЯ СВЕТ И НАЧИНАЕТСЯ ПАМЯТЬ." };
   const E_ANG = 0.9;
@@ -1218,40 +1215,16 @@ void main(){
       ctx.fillRect(pr.x - sz / 2, pr.y - sz / 2, sz, sz);
     });
     ctx.globalAlpha = 1;
-    let nearestExp = null;
-    for (const exp of EXPEDITIONS) {
-      if (RUN.expeditions.includes(exp.id)) continue;
-      const d = expeditionDistance(exp);
-      if (!nearestExp || d < nearestExp.d) nearestExp = { exp, d };
-      const pr = project(exp, B);
-      if (pr.ok && pr.depth > 0.3) {
-        const pulse = 3 + Math.sin(state.t * 2.4) * 1.2;
-        ctx.strokeStyle = "rgba(201,168,106,.8)";
-        ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.arc(pr.x, pr.y, 9 + pulse, 0, Math.PI * 2); ctx.stroke();
-        ctx.fillStyle = "rgba(201,168,106,.9)";
-        ctx.fillRect(pr.x - 1, pr.y - 1, 3, 3);
-      }
-    }
-    if (nearestExp && nearestExp.d < 2.2) {
-      state.nearbyExpedition = nearestExp.exp;
-      if (state.expeditionPrompt !== nearestExp.exp.id) {
-        state.expeditionPrompt = nearestExp.exp.id;
-        toast(`<span style="color:var(--amber)">${nearestExp.exp.name}</span><br>ОБЪЕКТ В ПРЕДЕЛАХ СКАНИРОВАНИЯ.`);
-      }
-    } else {
-      state.nearbyExpedition = null;
-      state.expeditionPrompt = null;
-    }
 
     // HUD-дистанции
     const dE = Math.hypot(cam.pos.x - EARTH.x, cam.pos.y - EARTH.y, cam.pos.z - EARTH.z) - EARTH.r;
     const dS = Math.hypot(cam.pos.x, cam.pos.y, cam.pos.z) - SUN.r;
     const v = Math.hypot(cam.vel.x, cam.vel.y, cam.vel.z);
-    $("#d-earth").textContent = dE.toFixed(1) + " R";
-    $("#d-sun").textContent = dS.toFixed(1) + " R";
-    $("#d-sun-compact").textContent = dS.toFixed(1) + " R";
-    $("#v-now").textContent = v.toFixed(1);
+    const setHud = (id, value) => { const el = $(id); if (el) el.textContent = value; };
+    setHud("#d-earth", dE.toFixed(1) + " R");
+    setHud("#d-sun", dS.toFixed(1) + " R");
+    setHud("#d-sun-compact", dS.toFixed(1) + " R");
+    setHud("#v-now", v.toFixed(1));
     const nearEl = $("#d-near");
     if (nearEl) nearEl.textContent = `${nearest.name} · ${nearest.d.toFixed(1)} R`;
 
@@ -1328,6 +1301,15 @@ void main(){
   $("#k-slow").onclick = () => { cam.vel = { x: 0, y: 0, z: 0 }; AudioLayer.ping(180, 0.4, 0.05); };
   $("#k-scan").onclick = () => {
     AudioLayer.ping(760, 0.6, 0.1);
+    const undiscovered = EXPEDITIONS
+      .filter((exp) => !RUN.expeditions.includes(exp.id))
+      .map((exp) => ({ exp, d: expeditionDistance(exp) }))
+      .sort((a, b) => a.d - b.d)[0];
+    if (undiscovered && undiscovered.d < 18) {
+      state.nearbyExpedition = undiscovered.exp;
+      inspectExpedition(undiscovered.exp);
+      return;
+    }
     const dE = Math.hypot(cam.pos.x - EARTH.x, cam.pos.y - EARTH.y, cam.pos.z - EARTH.z) - EARTH.r;
     const dS = Math.hypot(cam.pos.x, cam.pos.y, cam.pos.z) - SUN.r;
     let near = { name: "—", d: Infinity };
