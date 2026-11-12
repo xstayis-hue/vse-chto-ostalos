@@ -10,6 +10,59 @@
   --bg: #030507;
 }
 
+.title-screen .scripture-mark {
+  position: absolute;
+  z-index: 3;
+  top: calc(max(28px, env(safe-area-inset-top)) + 32px);
+  right: 20px;
+  width: min(250px, calc(100% - 40px));
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  color: #a8b8b0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: right;
+}
+.scene-scripture {
+  position: absolute;
+  z-index: 3;
+  top: 24px;
+  right: 24px;
+  width: min(260px, calc(100% - 48px));
+  margin: 0;
+  color: #e1e8e2;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: right;
+  text-shadow: 0 1px 6px #030507;
+}
+.scene-scripture:not(.scene-scripture-dark) {
+  width: min(320px, calc(100% - 32px));
+  right: 16px;
+  padding: 12px 16px;
+  background: linear-gradient(270deg, rgba(3, 8, 9, .82), rgba(3, 8, 9, .55) 75%, transparent);
+  box-shadow: none;
+}
+.scene-scripture cite {
+  display: block;
+  margin-top: 4px;
+  font-family: "Courier New", monospace;
+  font-size: 10px;
+  font-style: normal;
+}
+.scene-scripture-dark { color: #25322d; text-shadow: none; }
+.pixel-memory { position: absolute; inset: 0; overflow: hidden; background: #172321; }
+.pixel-memory canvas { position: absolute; width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
+.title-screen .scripture-mark small {
+  color: #85958e;
+  font-family: "Courier New", monospace;
+  font-size: 10px;
+  letter-spacing: .08em;
+}
+
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 body { font-family: "Courier New", monospace; color: var(--ink); -webkit-font-smoothing: antialiased; }
@@ -256,3 +309,68 @@ button:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
   .hud-row .panel:nth-child(2) { display: none; }
   .hint { white-space: normal; text-align: center; width: 90%; }
 }
+
+/* ---------- лиминальный слой: развёртка, мерцание, тревожная типографика ---------- */
+.title-screen::before, .archive-screen::before, .memory-stage::before {
+  content: ''; position: absolute; inset: 0; z-index: 30; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 1px, transparent 1px 3px);
+  mix-blend-mode: multiply; opacity: .55;
+}
+.title-screen { animation: flicker 7.3s steps(1) infinite; }
+.title-wrap .title { font-family: Georgia, "Times New Roman", serif; font-weight: 300; font-style: italic; color: #c9d4cd; text-shadow: 0 0 24px rgba(120,150,140,.18); }
+.title .ost { font-family: "Arial Narrow", Impact, sans-serif; font-style: normal; color: #9fb4aa; letter-spacing: .02em; text-shadow: 0 0 10px rgba(143,209,194,.15), 1px 0 rgba(176,101,98,.45), -1px 0 rgba(255,255,255,.2); animation: unease 5.9s steps(1) infinite; }
+.title-description { font-style: italic; color: #7f9089; letter-spacing: .03em; }
+.archive-screen .archive-kicker { font-style: italic; color: #6f837c; }
+.eyebrow, .title-topline, .title-bottomline { color: #5a6c66 !important; }
+.life-card { box-shadow: inset 0 0 60px rgba(0,0,0,.6), 0 0 40px rgba(0,0,0,.7); }
+.title-screen .title-button { animation: pulse-faint 4.1s ease-in-out infinite; }
+@keyframes flicker { 0%, 92%, 100% { opacity: 1; } 93% { opacity: .82; } 94% { opacity: 1; } 96% { opacity: .9; } }
+@keyframes unease { 0%, 80%, 100% { transform: skewX(-6deg); } 82% { transform: skewX(-9deg) translateX(2px); } 84% { transform: skewX(-4deg) translateX(-1px); } }
+@keyframes pulse-faint { 0%, 100% { box-shadow: 0 0 0 rgba(210,221,213,0); } 50% { box-shadow: 0 0 22px rgba(210,221,213,.12); } }
+@media (prefers-reduced-motion: reduce) {
+  .title-screen, .title .ost, .title-screen .title-button { animation: none !important; }
+}
+
+/* Авторский шрифт «ОСТАЛОСЬ»: без внешних файлов, деформация SVG-фильтром #warp (index.html). */
+.title .ost { font-family: Georgia, "Times New Roman", serif; font-style: italic; font-weight: 400; letter-spacing: -.02em; color: #b9c9c1; filter: url(#warp); text-shadow: none; transform: none; animation: none; }
+.title .ost::before, .title .ost::after { display: none; }
+.title-screen .title .ost { animation: unease 5.9s steps(1) infinite; }
+.title .line { display: block; font-family: Georgia, "Times New Roman", serif; font-style: italic; font-weight: 300; color: #c9d4cd; filter: url(#warp); }
+
+/* Кнопка входа: вариант 1 «Выцветшая печать». */
+.title-screen .title-button { position: relative; background: transparent !important; color: #b8c6bf !important; border: 0 !important; padding: 15px 26px; letter-spacing: .3em; font-weight: 400 !important; box-shadow: inset 0 0 0 1px rgba(201,212,205,.55), inset 0 0 0 4px rgba(3,5,7,1), inset 0 0 0 5px rgba(201,212,205,.18); animation: none; transition: color .3s, text-shadow .3s; }
+.title-screen .title-button span { color: inherit; font-size: 12px; }
+.title-screen .title-button:hover { color: #e6eee9 !important; text-shadow: 0 0 12px rgba(201,212,205,.35); transform: none !important; }
+.title-screen .title-button:active { animation: button-flash .25s steps(2) 1; }
+@keyframes button-flash { 0% { background: rgba(201,212,205,.25); } 100% { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .title-screen .title-button:active { animation: none; } }
+/* Рамка кнопки «Войти в архив»: неровная проволока через фильтр #rough, текст чистый. */
+.title-screen .title-button { box-shadow: none !important; }
+.title-screen .title-button::before, .title-screen .title-button::after { content: ''; position: absolute; pointer-events: none; border: 1px solid rgba(201,212,205,.6); filter: url(#rough); transition: border-color .3s; }
+.title-screen .title-button::before { inset: 0; }
+.title-screen .title-button::after { inset: 4px; border-color: rgba(201,212,205,.22); }
+.title-screen .title-button:hover::before { border-color: rgba(230,238,233,.9); }
+
+/* Экран выбора записи: тихий архивный список без сетки карточек. */
+.archive-list { width: min(420px, 100%); max-height: 100%; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 18px; padding: 28px 24px 22px; color: #9fb0a9; }
+.compact-navigation { display: none; }
+@media (max-width: 520px), (min-width: 700px) {
+  .panel .compact-navigation { display: block; }
+}
+.archive-list .archive-header { display: flex; justify-content: space-between; font-size: 9px; letter-spacing: .22em; color: #5a6c66; border-bottom: 1px solid rgba(158,190,181,.12); padding-bottom: 14px; }
+.archive-title { font-size: 34px; line-height: 1.1; color: #c9d4cd; margin-top: 8px; }
+.archive-title i { color: #7f9089; }
+.archive-hint { font-size: 10px; letter-spacing: .14em; color: #5a6c66; text-transform: lowercase; font-style: italic; }
+.archive-items { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.archive-item { width: 100%; display: grid; grid-template-columns: 34px 1fr; grid-template-rows: auto auto; column-gap: 8px; text-align: left; padding: 12px 8px; background: transparent; border: 0; border-bottom: 1px solid rgba(158,190,181,.08); color: #7f908a; transition: color .4s ease, background .4s ease; }
+.archive-item:hover { color: #c9d4cd; background: rgba(158,190,181,.04); }
+.archive-item.is-chosen { color: #e6eee9; background: rgba(176,101,98,.06); border-bottom-color: rgba(176,101,98,.35); }
+.archive-num { grid-row: 1 / 3; font-size: 10px; letter-spacing: .1em; color: #4c5d57; align-self: center; }
+.archive-name { font-size: 14px; letter-spacing: .04em; }
+.archive-meta { font-size: 10px; letter-spacing: .12em; color: #5a6c66; margin-top: 3px; }
+.archive-foot { margin-top: auto; border-top: 1px solid rgba(158,190,181,.12); padding-top: 16px; display: flex; flex-direction: column; gap: 14px; }
+.archive-last { font-style: italic; font-size: 13px; color: #8a9a94; min-height: 1.4em; }
+.archive-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+@media (max-width: 520px) { .archive-title { font-size: 28px; } }
+.archive-last { display: flex; flex-direction: column; gap: 4px; }
+.archive-last-label { font-style: normal; font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: #5a6c66; }

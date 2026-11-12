@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Проба пиксельной сцены</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #090e0e; color: #d9ded6; font-family: Georgia, serif; }
+  main { max-width: 480px; margin: auto; padding: 24px; }
+  header, .note { font: 12px/1.6 monospace; color: #a2b0a8; }
+  .scene { position: relative; width: 100%; aspect-ratio: 4 / 3; overflow: hidden; margin: 16px 0; background: #121a1a; border: 1px solid #53615a; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+  #actor { pointer-events: none; }
+  .caption { font-size: 20px; line-height: 1.5; }
+  button { min-height: 44px; color: #e2e8df; background: #1a2824; border: 1px solid #819389; padding: 10px 16px; cursor: pointer; }
+  button:focus-visible { outline: 2px solid #dcebe0; outline-offset: 3px; }
+</style>
+</head>
+<body>
+<main>
+  <header>АРХИВ / ПРОБА ПИКСЕЛЬНОЙ СЦЕНЫ</header>
+  <div class="scene">
+    <canvas id="room" width="160" height="120" role="img" aria-label="Пиксельная комната с окном и столом"></canvas>
+    <canvas id="actor" width="160" height="120" aria-hidden="true"></canvas>
+  </div>
+  <p class="caption">В окне дрожал вечерний свет.<br>Кто-то обещал скоро вернуться.</p>
+  <button id="change">Другая внешность</button>
+  <p class="note">Пробный рисунок: фон и персонаж — отдельные слои. Кнопка меняет детали одного спрайта. Это ещё не генератор историй.</p>
+</main>
+<script>
+const room = document.querySelector('#room').getContext('2d');
+const actor = document.querySelector('#actor').getContext('2d');
+const box = (ctx, x, y, w, h, color) => { ctx.fillStyle = color; ctx.fillRect(x, y, w, h); };
+function drawRoom() {
+  const r = (x,y,w,h,c) => box(room,x,y,w,h,c);
+  r(0,0,160,120,'#313c3a'); r(0,0,160,4,'#1a2221');
+  for (let x=0;x<160;x+=16) r(x,4,1,61,'#3a4643');
+  r(0,62,160,5,'#1a2524'); r(0,67,160,53,'#3d4540');
+  for (let y=72;y<120;y+=10) { r(0,y,160,1,'#27322f'); for(let x=(y%20 ? 0 : 20);x<160;x+=40) r(x,y,1,10,'#303a35'); }
+  r(91,10,52,48,'#192524'); r(94,13,46,42,'#89958e'); r(97,16,40,36,'#627b7b');
+  r(115,16,3,36,'#354b48'); r(97,33,40,3,'#354b48'); r(92,57,51,3,'#a2aaa0');
+  r(7,30,30,38,'#202b28'); r(10,33,24,3,'#707166'); r(10,47,24,3,'#707166');
+  r(13,37,5,10,'#59685c'); r(21,38,5,9,'#8a7763'); r(28,36,4,11,'#697b70');
+  r(96,81,46,5,'#74695a'); r(99,86,4,22,'#484d43'); r(136,86,4,22,'#484d43');
+  r(107,75,11,6,'#a49b83'); r(108,74,9,1,'#cec2a4');
+  r(0,116,160,4,'#1b2322');
+}
+const appearances = [
+  { hair:'#45382f', skin:'#c5aa94', coat:'#89968a', pants:'#3b4440' },
+  { hair:'#b1a07f', skin:'#d0b59e', coat:'#7e8990', pants:'#514b48' },
+  { hair:'#292d2b', skin:'#987b68', coat:'#8d8173', pants:'#303d3a' },
+  { hair:'#80766a', skin:'#bba18e', coat:'#697e76', pants:'#40433d' }
+];
+let selected = 0;
+function drawActor(blink = false) {
+  actor.clearRect(0,0,160,120);
+  const c = appearances[selected];
+  const r = (x,y,w,h,color) => box(actor,x,y,w,h,color);
+  // Each layer uses the same 160×120 grid as the room.
+  r(51,106,22,3,'#1b2220');
+  r(54,94,7,13,c.pants); r(64,94,7,13,c.pants); r(53,105,9,3,'#302a27'); r(64,105,10,3,'#302a27');
+  r(52,73,21,24,'#222d2a'); r(54,75,17,20,c.coat); r(49,77,5,17,c.coat); r(73,77,4,17,c.coat);
+  r(49,91,4,4,c.skin); r(73,91,4,4,c.skin); r(59,74,8,4,'#c5c7b2');
+  r(53,52,19,23,c.hair); r(51,57,23,12,c.hair); r(55,58,15,15,c.skin);
+  r(54,54,17,6,c.hair); r(53,58,4,7,c.hair); r(66,57,5,4,c.hair);
+  if (!blink) { r(58,64,2,2,'#282b28'); r(66,64,2,2,'#282b28'); }
+  else { r(58,65,2,1,'#282b28'); r(66,65,2,1,'#282b28'); }
+  r(61,70,4,1,'#745d52'); r(56,76,3,14,'#aab4a5');
+}
+drawRoom(); drawActor();
+document.querySelector('#change').addEventListener('click', () => { selected = (selected + 1) % appearances.length; drawActor(); });
+const motion = matchMedia('(prefers-reduced-motion: reduce)');
+let blinkTimer;
+function scheduleBlink() {
+  clearTimeout(blinkTimer);
+  drawActor();
+  if (motion.matches || document.hidden) return;
+  blinkTimer = setTimeout(() => { drawActor(true); blinkTimer = setTimeout(scheduleBlink, 140); }, 4800);
+}
+motion.addEventListener?.('change', scheduleBlink);
+document.addEventListener('visibilitychange', scheduleBlink);
+scheduleBlink();
+</script>
+</body>
+</html>

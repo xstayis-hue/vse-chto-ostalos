@@ -1,6 +1,10 @@
-/* «Всё, что от меня ОСТАЛОСЬ» — вертикальная демка.
+﻿/* «Всё, что от меня ОСТАЛОСЬ» — вертикальная демка.
    Космос: вид от первого лица (глаза сущности), свободный полёт.
    Без зависимостей. */
+
+// ---------- Telegram Mini App ----------
+const TG = window.Telegram?.WebApp;
+if (TG) { TG.ready(); TG.expand(); TG.setHeaderColor?.('#030507'); TG.setBackgroundColor?.('#030507'); TG.disableVerticalSwipes?.(); }
 
 // ---------- утилиты ----------
 const $ = (s, r = document) => r.querySelector(s);
@@ -19,7 +23,10 @@ function flashOn() {
 const AudioLayer = {
   ctx: null, master: null, drone: null, started: false,
   ensure() {
-    if (this.started) return;
+    if (this.started) {
+      if (this.ctx?.state === "suspended" && navigator.userActivation?.isActive) this.ctx.resume().catch(() => {});
+      return;
+    }
     try {
       const C = new (window.AudioContext || window.webkitAudioContext)();
       this.ctx = C;
@@ -122,13 +129,21 @@ const lifePool = Array.from({length:100}, (_, i) => {
   const year = 1940 + (i * 7 % 26);
   const desire = desires[Math.floor(i / 10)];
   const last = endings[(i * 7) % 10];
+  const g = gender === 'f' ? ['ты','ты'] : ['ты','ты'];
+  const pick = (arr, k) => arr[(i * k + Math.floor(i / 7) * 3) % arr.length];
+  const kitchen = ['На кухне кто-то тихо пел.','В коридоре хлопнула дверь.','Чай остыл, а никто не пришёл.','Кто-то переставил чужие вещи на полку.','Ночью ворчал холодильник.'][i % 5];
+  const voice = ['Голос теряется раньше, чем мелодия.','Некоторые слова так и не были сказаны.','Имя звучало чужим, хотя было твоим.','Ты помнил интонацию, но не смысл.','Звонок прервался на полуслове.'][(i * 3) % 5];
+  const callText = ['Ночью раздался звонок.','Телефон зазвонил, когда ты уже спал.','Номер был знакомым, но трубку никто не взял.','Письмо пришло вместо звонка.','Дверь открыли, а за ней никого.'][(i * 2) % 5];
+  const callDesc = ['Некоторые разговоры продолжаются всю жизнь.','Ответ так и остался в той ночи.','Тишина в трубке звучала громче слов.','С того дня всё стало немного другим.','Ты так и не узнал, кто звонил.'][(i * 4) % 5];
+  const seaText = gender === 'f' ? 'Однажды ты увидела море в последний раз.' : 'Однажды ты увидел море в последний раз.';
+  const seaDesc = gender === 'f' ? 'Ты тогда ещё не знала.' : 'Ты тогда ещё не знал.';
   return { id:i, gender, name, num:`№ ${String(4918220000 + i).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}`, place, year,
     desire, last, memories:[
-      { y:String(year), h: childhood[i % childhood.length], p:'Ты никогда не вспомнишь этот свет.', fx:'rain', n:18 },
-      { y:String(year+7), h:'На кухне кто-то тихо пел.', p:'Голос теряется раньше, чем мелодия.', fx:'ice', n:0 },
-      { y:String(year+24), h: middle[(i * 3) % middle.length], p:gender === 'f' ? 'Ты ещё долго стояла на платформе.' : 'Ты ещё долго стоял на платформе.', fx:'split', n:0 },
-      { y:String(year+43), h:'Ночью раздался звонок.', p:'Некоторые разговоры продолжаются всю жизнь.', fx:'room', n:0 },
-      { y:String(year+68), h:gender === 'f' ? 'Однажды ты увидела море в последний раз.' : 'Однажды ты увидел море в последний раз.', p:gender === 'f' ? 'Ты тогда ещё не знала.' : 'Ты тогда ещё не знал.', fx:'sea', n:0 }
+      { y:String(year), h: gender === 'f' ? 'Ты появилась на свет.' : 'Ты появился на свет.', p:`${place}. Этот день сохранился только в чужой памяти.`, fx:'rain', n:18 },
+      { y:String(year+7), h: kitchen, p: voice, fx:'ice', n:0 },
+      { y:String(year+24), h: 'Поезд ещё стоял у платформы.', p: gender === 'f' ? 'Ты так и не вошла в вагон. Причина этого решения не сохранилась.' : 'Ты так и не вошёл в вагон. Причина этого решения не сохранилась.', fx:'split', n:0, image: gender === 'm' && i % 4 === 1 ? 'assets/memory-platform-alt.jpg' : null },
+      { y:String(year+43), h: callText, p: callDesc, fx:'room', n:0 },
+      { y:String(year+68), h: seaText, p: seaDesc, fx:'sea', n:0 }
     ] };
 });
 let offeredLives = [];
@@ -153,10 +168,11 @@ async function titleScreen() {
   AudioLayer.ensure(); AudioLayer.fade(0.0001, 0.1);
   render(`
     <div class="screen title-screen">
-      <div class="title-topline"><span>ARCHIVE / 01</span><span>ПОСЛЕ ЧЕЛОВЕКА</span></div>
+      <div class="title-topline"><span>ЦИКЛ / 047</span><span>ПОСЛЕ ЧЕЛОВЕКА</span></div>
+      <div class="scripture-mark"><span>«Что Я делаю, теперь ты не знаешь, а уразумеешь после.»</span><small>Ин. 13:7</small></div>
       <div class="title-wrap">
         <div class="eyebrow">запись найдена · отправитель неизвестен</div>
-        <h1 class="title serif">Всё, что от меня<span class="ost" data-t="ОСТАЛОСЬ">ОСТАЛОСЬ</span></h1>
+        <h1 class="title serif"><span class="line">Всё, что от меня</span><span class="ost" data-t="ОСТАЛОСЬ">ОСТАЛОСЬ</span></h1>
         <p class="title-description">Они думали, что после последнего вдоха<br>никто не услышит тишину.</p>
         <div class="start-row">
           <button class="button primary title-button" data-go="choose">Войти в архив <span>↗</span></button>
@@ -167,26 +183,27 @@ async function titleScreen() {
 }
 
 async function chooseScreen() {
+  const current = LIFE;
   render(`
     <div class="screen archive-screen">
-      <div class="life-card">
-        <div class="archive-header"><span>АРХИВ / ЗАПИСЬ 01</span><span>● СВЯЗЬ УСТАНОВЛЕНА</span></div>
-        <div class="eyebrow archive-kicker">пять записей · один свидетель</div>
-        <h2 class="serif">Кем ты был<span> до тишины?</span></h2>
-        <div class="life-count">ВЫБЕРИ ЗАПИСЬ. ТЫ УВИДИШЬ ТОЛЬКО ТО, ЧТО НЕ УСПЕЛО ИСЧЕЗНУТЬ.</div>
-        <div class="life-options">${offeredLives.map(person => `<button class="life-option ${person.id === LIFE.id ? 'selected' : ''}" data-life="${person.id}" aria-pressed="${person.id === LIFE.id}"><span>${person.name}</span><small>${person.year} · ${person.place}</small></button>`).join('')}</div>
-        <div class="fields">
-          <div class="field"><span>ОБЪЕКТ</span><b class="mono-digits">${LIFE.num}</b></div>
-          <div class="field"><span>ИМЯ</span><b>${LIFE.name}</b></div>
-          <div class="field"><span>МЕСТО</span><b>${LIFE.place}</b></div>
-          <div class="field"><span>ГОД РОЖДЕНИЯ</span><b class="mono-digits">${LIFE.year}</b></div>
-          <div class="field"><span>ОСНОВНОЕ ЖЕЛАНИЕ</span><b>${LIFE.desire}</b></div>
-          <div class="field"><span>СОСТОЯНИЕ</span><b style="color:var(--danger)">НЕ НАЙДЕНО</b></div>
-          <div class="lastline">ПОСЛЕДНЯЯ МЫСЛЬ · «${LIFE.last}» · ЗАПИСЬ ПОВРЕЖДЕНА</div>
-        </div>
-        <div class="row">
-          <button class="button primary" data-go="mem">Прожить эту жизнь <span>↗</span></button>
-          <button class="button ghost" data-go="reroll">Другая пятёрка</button>
+      <div class="archive-list">
+ <div class="archive-header"><span>АРХИВ · 01</span><span>● СВЯЗЬ</span></div>
+        <div class="archive-title serif">Кем ты был<br><i>до тишины?</i></div>
+        <div class="archive-hint">пять записей. одна из них — ты.</div>
+        <ol class="archive-items">
+   ${offeredLives.map((person, i) => `
+     <li><button class="archive-item ${person.id === current.id ? "is-chosen" : ""}" data-life="${person.id}" aria-pressed="${person.id === current.id}">
+       <span class="archive-num">${String(i + 1).padStart(2, "0")}</span>
+       <span class="archive-name">${person.name}</span>
+       <span class="archive-meta">${person.year} · ${person.place}</span>
+            </button></li>`).join("")}
+        </ol>
+        <div class="archive-foot">
+   <div class="archive-last"><span class="archive-last-label">последняя мысль · запись повреждена</span>«${current.last}»</div>
+          <div class="archive-actions">
+     <button class="button primary" data-go="mem">Прожить эту жизнь <span>↗</span></button>
+     <button class="button ghost" data-go="reroll">Другая пятёрка</button>
+   </div>
         </div>
       </div>
     </div>`);
@@ -208,8 +225,9 @@ async function memoryScreen(idx) {
         <span class="eyebrow">${LIFE.name}</span>
       </div>
       <div class="scene">
-        <div class="fx ${m.fx}">${rain}${cracks}</div>
+        <div class="pixel-memory" aria-hidden="true"><canvas class="pixel-background" width="160" height="120"></canvas><canvas class="pixel-actor" width="160" height="120"></canvas></div>
         ${m.fx === "room" ? '<div class="fx phone"></div>' : ""}
+        ${idx === 0 ? '<blockquote class="scene-scripture"><span>«Я свет миру; кто последует за Мною, тот не будет ходить во тьме.»</span><cite>Ин. 8:12</cite></blockquote>' : ''}
         <div class="caption">
           <div class="yeartag">${m.y}</div>
           <h2 class="serif" id="cap-h"></h2>
@@ -223,21 +241,24 @@ async function memoryScreen(idx) {
       </div>
     </div>`);
   const heading = $("#cap-h"), description = $("#cap-p");
+  drawPixelMemory(stage, idx, LIFE);
   await typeText(heading, m.h, 20);
   if (heading?.isConnected) await typeText(description, m.p, 10);
 }
 
 function transitionToSpace() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { spaceScreen(); return; }
   const variant = LIFE.id % 5;
-  render(`<div class="departure departure-${variant}" role="status" aria-label="Переход в космос"><video class="departure-video" autoplay muted playsinline preload="auto" src="assets/departure-hospital.mp4"></video><div class="departure-orbit"></div><div class="departure-light"></div><span>СОЗНАНИЕ ОТДЕЛЯЕТСЯ</span></div>`);
+  render(`<div class="departure departure-${variant}" role="status" aria-label="Переход в космос"><video class="departure-video" autoplay muted playsinline preload="auto" src="assets/departure-orbit.mp4"></video><div class="departure-orbit"></div><div class="departure-light"></div><span>ТЕЛО БОЛЬШЕ НЕ ОТВЕЧАЕТ</span></div>`);
   AudioLayer.ping(180 + variant * 30, 1.2, 0.04);
   const video = $('.departure-video');
   video.addEventListener('playing', () => video.parentElement?.classList.add('video-playing'), { once: true });
   let completed = false;
   const finish = () => { if (!completed && $('.departure')) { completed = true; spaceScreen(); } };
   video.addEventListener('ended', finish, { once: true });
-  video.addEventListener('error', () => setTimeout(finish, 2600), { once: true });
-  video.play().catch(() => setTimeout(finish, 2600));
+  video.addEventListener('error', finish, { once: true });
+  video.play().catch(finish);
+  setTimeout(() => { if (!video.currentTime || video.readyState < 2) finish(); }, 2500);
   setTimeout(finish, 9000);
 }
 
@@ -246,6 +267,7 @@ async function deathScreen() {
     <div class="memory-stage">
       <div class="scene">
         <div class="fx whiteout"></div>
+        <blockquote class="scene-scripture scene-scripture-dark"><span>«Свет ещё на малое время есть с вами; ходите, пока есть свет, чтобы не объяла вас тьма.»</span><cite>Ин. 12:35</cite></blockquote>
         <div class="caption" style="color:#1a221f">
           <div class="yeartag" style="color:#3c4a45">СЕРДЦЕБИЕНИЕ: НЕ ОБНАРУЖЕНО</div>
           <h2 class="serif" id="death-h"></h2>
@@ -254,8 +276,8 @@ async function deathScreen() {
         </div>
       </div>
       <div class="scene-foot">
-        <span class="faint" style="font-size:10px;color:#39443f">объект больше не числится среди живых</span>
-        <button class="button primary" data-go="space" style="border-color:#41534d;color:#101815">Открыть глаза</button>
+        <span class="faint" style="font-size:10px;color:#8a9a94">объект больше не числится среди живых</span>
+        <button class="button primary" data-go="space" style="border-color:#8a9a94;color:#e6ece8">Открыть глаза</button>
       </div>
     </div>`);
   await typeText($("#death-h"), LIFE.gender === 'f' ? "Ты умерла." : "Ты умер.", 90);
@@ -283,6 +305,7 @@ function spaceScreen() {
           <div class="eyebrow">объект · ${LIFE.name}</div>
           <p>СОСТОЯНИЕ: <b>ПОСЛЕ</b></p>
           <p>ПАМЯТЬ: <b>${LIFE.memories.length} ФРАГМЕНТА</b></p>
+          <p class="compact-navigation">ДО СОЛНЦА: <b id="d-sun-compact">—</b></p>
         </div>
         <div class="panel" style="text-align:right">
           <div class="eyebrow">навигация</div>
@@ -317,8 +340,10 @@ function spaceScreen() {
   let W = 0, H = 0, DPR = 1;
 
   // --- камера (глаза сущности): старт у Земли, взгляд на Солнце ---
-  const cam = { yaw: -2.47, pitch: 0, pos: { x: 77, y: 1.2, z: 98 }, vel: { x: 0, y: 0, z: 0 } };
+  const cam = { yaw: -2.34, pitch: -0.08, pos: { x: 82, y: 3.2, z: 106 }, vel: { x: 0, y: 0, z: 0 } };
   const FOV = 1.05; // радиан по горизонтали
+  // На телефоне взгляд чувствительнее к дрожанию пальца: меньше усиление и сглаживание ниже.
+  const LOOK_GAIN = matchMedia('(pointer: coarse)').matches ? 1.1 : 2.4;
 
   // --- Солнечная система: Солнце в (0,0,0), планеты на сжатых орбитах вокруг него ---
   // 1 а.е. = 120 R⊕. Игрок стартует у Земли (дистанция 120 от Солнца), видит его прямо перед собой.
@@ -387,7 +412,8 @@ function spaceScreen() {
       renderer.domElement.className = 'space-webgl';
       canvas.insertAdjacentElement('beforebegin', renderer.domElement);
       const scene = new THREE.Scene();
-      const sky = new THREE.TextureLoader().load('assets/milky-way-4k.jpg');
+      const skyFile = coarse ? 'milky-way-4k.jpg' : 'milky-way-8k.jpg';
+      const sky = new THREE.TextureLoader().load(`assets/${skyFile}`);
       sky.mapping = THREE.EquirectangularReflectionMapping;
       sky.colorSpace = THREE.SRGBColorSpace;
       sky.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
@@ -429,7 +455,7 @@ function spaceScreen() {
       // Процедурные туманности: не одна размытая панорама, а несколько
       // полупрозрачных облаков, которые медленно меняют яркость и смещаются.
       const nebulaTexture = (hue, seed) => {
-        const c = document.createElement('canvas'); c.width = 768; c.height = 512;
+        const c = document.createElement('canvas'); c.width = 1024; c.height = 640;
         const x = c.getContext('2d');
         x.clearRect(0, 0, c.width, c.height);
         for (let i = 0; i < 22; i++) {
@@ -465,34 +491,126 @@ function spaceScreen() {
         { p: [0, -420, -1050], s: [900, 300], hue: 210, opacity: .35, seed: 31 }
       ];
       const nebulaSprites = nebulaDefs.map((n, i) => {
-        const material = new THREE.SpriteMaterial({ map: nebulaTexture(n.hue, n.seed), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: n.opacity, color: 0xffffff });
+        const material = new THREE.SpriteMaterial({ map: nebulaTexture(n.hue, n.seed), transparent: true, depthWrite: false, depthTest: false, blending: THREE.NormalBlending, opacity: n.opacity * .72, color: 0xffffff });
         const sprite = new THREE.Sprite(material);
         sprite.position.set(...n.p); sprite.scale.set(n.s[0], n.s[1], 1); sprite.userData = { base: n.opacity, phase: i * 1.7 };
         nebulaGroup.add(sprite); return sprite;
       });
       scene.add(nebulaGroup);
       scene.add(new THREE.AmbientLight(0x4f6075, 0.55));
+      const station = new THREE.Group();
+      const metal = new THREE.MeshStandardMaterial({ color: 0x6b736f, roughness: .9, metalness: .2 });
+      const panelMat = new THREE.MeshStandardMaterial({ color: 0x2b3431, roughness: .8, metalness: .6 });
+      const truss = new THREE.Mesh(new THREE.BoxGeometry(9, .35, .35), metal);
+      const module = new THREE.Mesh(new THREE.CylinderGeometry(.9, .9, 2.2, 16), metal); module.rotation.z = Math.PI / 2;
+      const panels = [-3.3, 3.3].flatMap(x => [-0.85, 0.85].map(z => { const p = new THREE.Mesh(new THREE.BoxGeometry(2.6, .03, 1.3), panelMat); p.position.set(x, 0, z); return p; }));
+      station.add(truss, module, ...panels);
+      station.scale.setScalar(1.9e-6);
+      scene.add(station);
+      const glintCanvas = document.createElement('canvas'); glintCanvas.width = glintCanvas.height = 32;
+      const gx = glintCanvas.getContext('2d');
+      const glintGrad = gx.createRadialGradient(16, 16, 0, 16, 16, 16);
+      glintGrad.addColorStop(0, 'rgba(230,238,233,1)'); glintGrad.addColorStop(0.4, 'rgba(230,238,233,0.35)'); glintGrad.addColorStop(1, 'rgba(230,238,233,0)');
+      gx.fillStyle = glintGrad; gx.fillRect(0, 0, 32, 32);
+      const glint = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(glintCanvas), transparent: true, depthTest: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+      glint.scale.setScalar(0.045);
+      glint.material.opacity = 0.45;
+      scene.add(glint);
       const light = new THREE.PointLight(0xffefce, 3, 0, 0);
       light.position.set(0, 0, 0); scene.add(light);
       const camera = new THREE.PerspectiveCamera(55, stage.clientWidth / stage.clientHeight, 0.03, 5000);
       const geometry = new THREE.SphereGeometry(1, 64, 40);
+      const sunShader = { uniforms: { uTime: { value: 0 } } };
+      const makeSunMaterial = (sceneRef) => {
+ const mat = new THREE.ShaderMaterial({
+   uniforms: sunShader.uniforms,
+   vertexShader: `varying vec3 vN; varying vec3 vP; void main(){ vN = normalize(normalMatrix * normal); vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+   fragmentShader: `uniform float uTime; varying vec3 vN; varying vec3 vP;
+float hash(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+float noise(vec3 p){ vec3 i = floor(p); vec3 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(hash(i), hash(i + vec3(1,0,0)), f.x), mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
+      mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x), mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z); }
+float fbm(vec3 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * noise(p); p *= 2.03; a *= 0.5; } return s; }
+void main(){
+  vec3 p = vP * 15.0 + vec3(0.0, 0.0, uTime * 0.16);
+  float warp = fbm(p * 0.42 + uTime * 0.05);
+  float broad = fbm(p * 0.72 + warp * 1.2);
+  float grain = fbm(p * 2.7 - uTime * 0.08);
+  float n = broad * 0.62 + grain * 0.38;
+  vec3 dark = vec3(0.55, 0.14, 0.03);
+  vec3 mid = vec3(1.0, 0.55, 0.12);
+  vec3 hot = vec3(1.0, 0.92, 0.5);
+  vec3 col = mix(dark, mid, smoothstep(0.3, 0.55, n));
+  col = mix(col, hot, smoothstep(0.5, 0.78, n));
+  col *= 0.84 + 0.24 * smoothstep(0.25, 0.75, n);
+  float mu = clamp(vN.z, 0.0, 1.0);
+  col *= mix(0.75, 1.1, pow(mu, 0.4));
+  col += vec3(1.0, 0.85, 0.3) * smoothstep(0.7, 1.0, 1.0 - mu) * 0.5;
+  col += vec3(1.0, 0.8, 0.2) * pow(1.0 - mu, 3.0) * 0.8;
+  gl_FragColor = vec4(col, 1.0);
+}`
+ });
+        const cc = document.createElement('canvas'); cc.width = cc.height = 128;
+        const cx = cc.getContext('2d');
+        const cg = cx.createRadialGradient(64, 64, 0, 64, 64, 64);
+ cg.addColorStop(0.5, 'rgba(255,190,60,0.5)');
+        cg.addColorStop(0.75, 'rgba(255,120,30,0.18)');
+        cg.addColorStop(1, 'rgba(230,90,20,0)');
+        cx.fillStyle = cg; cx.fillRect(0, 0, 128, 128);
+        const corona = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cc), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+        corona.scale.setScalar(30);
+        sceneRef.add(corona);
+ return mat;
+      };
       const loader = new THREE.TextureLoader();
       const names = { 'СОЛНЦЕ':'sun', 'ЗЕМЛЯ':'earth', 'ЛУНА':'moon', 'МЕРКУРИЙ':'mercury', 'ВЕНЕРА':'venus', 'МАРС':'mars', 'ЮПИТЕР':'jupiter', 'САТУРН':'saturn', 'УРАН':'uranus', 'НЕПТУН':'neptune' };
       const meshes = [];
       for (const body of BODIES) {
-        const texture = loader.load(`assets/${names[body.name]}.jpg`);
-        texture.colorSpace = THREE.SRGBColorSpace;
-        const material = body.sun ? new THREE.MeshBasicMaterial({ map: texture, color: 0xffdbac }) : new THREE.MeshStandardMaterial({ map: texture, roughness: 1 });
+        const texture = body.sun ? null : loader.load(`assets/${names[body.name]}.jpg`);
+        if (texture) texture.colorSpace = THREE.SRGBColorSpace;
+        const material = body.sun ? makeSunMaterial(scene) : new THREE.MeshStandardMaterial({ map: texture, roughness: 1 });
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.set(body.x, body.y, body.z); mesh.scale.setScalar(body.r);
         scene.add(mesh); meshes.push(mesh);
         if (body.ring) {
-          const rings = new THREE.Mesh(new THREE.RingGeometry(body.r * 1.3, body.r * 2.1, 96), new THREE.MeshBasicMaterial({ color: 0xc8b898, side: THREE.DoubleSide, transparent: true, opacity: 0.5 }));
-          rings.rotation.x = Math.PI / 2.3; rings.position.copy(mesh.position); scene.add(rings);
-          mesh.userData.orbitalRings = rings;
+          // Кольца не одним гладким диском: реальные кольца — это пыль и лёд,
+          // собранные в сотни полос с промежутками Кассини.
+          const ringGroup = new THREE.Group();
+          const ringBands = [
+            [1.18, 1.28, .16], [1.31, 1.36, .08], [1.4, 1.48, .28],
+            [1.51, 1.57, .13], [1.61, 1.72, .34], [1.75, 1.79, .09],
+            [1.84, 1.94, .25], [1.99, 2.07, .16], [2.1, 2.2, .3]
+          ];
+          ringBands.forEach(([inner, outer, opacity], index) => {
+            const material = new THREE.MeshStandardMaterial({
+              color: index % 3 === 0 ? 0xb8ae98 : index % 3 === 1 ? 0x8f8878 : 0xc8bfa8,
+              roughness: 1, metalness: 0, side: THREE.DoubleSide,
+              transparent: true, opacity, depthWrite: false
+            });
+            const band = new THREE.Mesh(new THREE.RingGeometry(body.r * inner, body.r * outer, 128), material);
+            band.rotation.x = Math.PI / 2.3;
+            ringGroup.add(band);
+          });
+          ringGroup.userData.isRings = true;
+          scene.add(ringGroup);
+          mesh.userData.orbitalRings = ringGroup;
         }
       }
-      space3d = { renderer, scene, camera, meshes, starField, starMaterial, nebulaGroup, nebulaSprites, quality };
+      const moons = [
+        { parent: 'МАРС', r: 0.12, d: 1.1, speed: 0.9 }, { parent: 'МАРС', r: 0.08, d: 1.5, speed: 0.6 },
+        { parent: 'ЮПИТЕР', r: 0.35, d: 9, speed: 0.5 }, { parent: 'ЮПИТЕР', r: 0.3, d: 11, speed: 0.4 },
+ { parent: 'ЮПИТЕР', r: 0.32, d: 13, speed: 0.33 }, { parent: 'ЮПИТЕР', r: 0.25, d: 15, speed: 0.27 },
+ { parent: 'САТУРН', r: 0.3, d: 8, speed: 0.45 }, { parent: 'САТУРН', r: 0.25, d: 10, speed: 0.36 }, { parent: 'САТУРН', r: 0.22, d: 12, speed: 0.3 },
+        { parent: 'УРАН', r: 0.2, d: 4, speed: 0.6 }, { parent: 'УРАН', r: 0.15, d: 5.5, speed: 0.45 },
+        { parent: 'НЕПТУН', r: 0.2, d: 3.5, speed: 0.55 },
+      ].map(m => {
+ const parentMesh = meshes[BODIES.findIndex(b => b.name === m.parent)];
+        const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x9a9a92, roughness: 1 }));
+ mesh.scale.setScalar(m.r);
+ scene.add(mesh);
+        return { mesh, parentMesh, d: m.d, speed: m.speed, phase: Math.random() * Math.PI * 2 };
+      });
+      space3d = { renderer, scene, camera, meshes, starField, starMaterial, nebulaGroup, nebulaSprites, quality, station, glint, sunUniforms: sunShader.uniforms, moons };
     } catch (error) { console.warn('WebGL недоступен; используется резервный рендер', error); }
   }
 
@@ -511,7 +629,8 @@ function spaceScreen() {
     return { x, y: y0 / n, z: z / n, m: 0.12 + Math.random() * 0.3 };
   });
 
-  const state = { dead: false, raf: 0, t: 0, last: 0, thrust: { x: 0, y: 0 }, events: { earth: false, moon: false, far: false }, scanT: 0 };
+  const state = { dead: false, modal: false, raf: 0, t: 0, last: 0, thrust: { x: 0, y: 0 }, events: { earth: false, moon: false, far: false }, scanT: 0 };
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function resize() {
     DPR = Math.min(devicePixelRatio || 1, 2);
@@ -737,17 +856,17 @@ function spaceScreen() {
     MOON.x = EARTH.x + moonOffset.x * Math.cos(moonAngle) - moonOffset.z * Math.sin(moonAngle);
     MOON.z = EARTH.z + moonOffset.x * Math.sin(moonAngle) + moonOffset.z * Math.cos(moonAngle);
     // «дыхание» сущности: едва заметное покачивание взгляда
-    const brY = Math.sin(state.t * 0.5) * 0.006, brP = Math.cos(state.t * 0.34) * 0.004;
+    const brY = reducedMotion ? 0 : Math.sin(state.t * 0.5) * 0.006, brP = reducedMotion ? 0 : Math.cos(state.t * 0.34) * 0.004;
     const B = basis(cam.yaw + brY, cam.pitch + brP);
 
     // физика полёта: тяга по направлению взгляда + дрейф (дистанции реальные — тяга высокая)
-    const accel = 28;
+    const accel = state.modal ? 0 : 28;
     cam.vel.x += (B.f.x * state.thrust.y + B.r.x * state.thrust.x) * accel * dt;
     cam.vel.y += (B.f.y * state.thrust.y + B.r.y * state.thrust.x) * accel * dt;
     cam.vel.z += (B.f.z * state.thrust.y + B.r.z * state.thrust.x) * accel * dt;
     const damp = Math.pow(0.985, dt * 60); // инерция/затухание, не зависит от FPS
     cam.vel.x *= damp; cam.vel.y *= damp; cam.vel.z *= damp;
-    cam.pos.x += cam.vel.x * dt; cam.pos.y += cam.vel.y * dt; cam.pos.z += cam.vel.z * dt;
+    if (!state.modal) { cam.pos.x += cam.vel.x * dt; cam.pos.y += cam.vel.y * dt; cam.pos.z += cam.vel.z * dt; }
 
     // фон: при WebGL небо рисует three.js, 2D-слой прозрачный
     ctx.clearRect(0, 0, W, H);
@@ -796,7 +915,7 @@ function spaceScreen() {
       const res = space3d ? project(b, B) : drawPlanet(b, B, o);
       if (b === MOON) moonHit = res;
       // приближение к телу: одноразовое системное сообщение
-      if (res && it.d < 3 && !state.events[b.name]) {
+      if (!state.modal && res && (space3d ? res.ok : true) && it.d < 3 && !state.events[b.name]) {
         state.events[b.name] = true;
         if (b === MOON) { eventMoon(); }
         else { AudioLayer.ping(300, 0.8, 0.06); toast(`<span style="color:var(--cyan)">${b.name}</span><br>${b.line}`); }
@@ -804,12 +923,21 @@ function spaceScreen() {
     }
 
     if (space3d) {
-      const { renderer, scene, camera, meshes, starField, starMaterial, nebulaGroup, nebulaSprites } = space3d;
+      const { renderer, scene, camera, meshes, starField, starMaterial, nebulaGroup, nebulaSprites, station, glint } = space3d;
+      const stationAngle = state.t * 0.25;
+      station.position.set(EARTH.x + Math.cos(stationAngle) * 1.25, EARTH.y + 0.15, EARTH.z + Math.sin(stationAngle) * 1.25);
+      station.rotation.y = -stationAngle;
+      glint.position.copy(station.position);
       if (camera.aspect !== W / H) { camera.aspect = W / H; camera.updateProjectionMatrix(); renderer.setSize(W, H); }
       camera.position.set(cam.pos.x, cam.pos.y, cam.pos.z);
       starField.position.copy(camera.position);
       starField.rotation.y = state.t * 0.00018;
       starMaterial.uniforms.uTime.value = state.t;
+      space3d.sunUniforms.uTime.value = state.t;
+      space3d.moons.forEach(m => {
+        const a = m.phase + state.t * m.speed;
+        m.mesh.position.set(m.parentMesh.position.x + Math.cos(a) * m.d * 0.18, m.parentMesh.position.y, m.parentMesh.position.z + Math.sin(a) * m.d * 0.18);
+      });
       nebulaGroup.rotation.y = state.t * 0.00008;
       nebulaSprites.forEach(sprite => {
         sprite.material.opacity = sprite.userData.base * (0.82 + 0.18 * Math.sin(state.t * 0.16 + sprite.userData.phase));
@@ -835,37 +963,20 @@ function spaceScreen() {
     });
     ctx.globalAlpha = 1;
 
-    // станция-призрак: крошечный крест с мигающим огнём
-    {
-      const pr = project(STATION, B);
-      if (pr.ok && pr.depth > 0.5) {
-        const s = Math.max(2, (0.06 / pr.depth) * f);
-        ctx.strokeStyle = "rgba(160,175,170,0.5)";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(pr.x - s, pr.y); ctx.lineTo(pr.x + s, pr.y);
-        ctx.moveTo(pr.x, pr.y - s); ctx.lineTo(pr.x, pr.y + s);
-        ctx.stroke();
-        if (Math.sin(state.t * 2.4) > 0.86) {
-          ctx.fillStyle = "rgba(200,90,80,0.9)";
-          ctx.beginPath(); ctx.arc(pr.x, pr.y, Math.max(1.5, s * 0.18), 0, Math.PI * 2); ctx.fill();
-        }
-      }
-    }
-
     // HUD-дистанции
     const dE = Math.hypot(cam.pos.x - EARTH.x, cam.pos.y - EARTH.y, cam.pos.z - EARTH.z) - EARTH.r;
     const dS = Math.hypot(cam.pos.x, cam.pos.y, cam.pos.z) - SUN.r;
     const v = Math.hypot(cam.vel.x, cam.vel.y, cam.vel.z);
     $("#d-earth").textContent = dE.toFixed(1) + " R";
     $("#d-sun").textContent = dS.toFixed(1) + " R";
+    $("#d-sun-compact").textContent = dS.toFixed(1) + " R";
     $("#v-now").textContent = v.toFixed(1);
     const nearEl = $("#d-near");
     if (nearEl) nearEl.textContent = `${nearest.name} · ${nearest.d.toFixed(1)} R`;
 
     // события по мере полёта: теперь относительно Земли в её реальной точке орбиты
-    if (!state.events.earth && dE > 22) { state.events.earth = true; eventEarthFar(); }
-    if (!state.events.far && dS > 700) { state.events.far = true; eventSignal(); }
+    if (!state.modal && !state.events.earth && dE > 22) { state.events.earth = true; eventEarthFar(); }
+    if (!state.modal && !state.events.far && dS > 700) { state.events.far = true; eventSignal(); }
 
     state.raf = requestAnimationFrame(frame);
   }
@@ -875,8 +986,8 @@ function spaceScreen() {
   canvas.addEventListener("pointerdown", (e) => { look = { x: e.clientX, y: e.clientY, id: e.pointerId }; canvas.setPointerCapture(e.pointerId); });
   canvas.addEventListener("pointermove", (e) => {
     if (!look || e.pointerId !== look.id) return;
-    cam.yaw += (e.clientX - look.x) / W * 2.4;
-    cam.pitch = clamp(cam.pitch + (e.clientY - look.y) / H * 2.4, -1.35, 1.35);
+    cam.yaw += (e.clientX - look.x) / W * LOOK_GAIN;
+    cam.pitch = clamp(cam.pitch + (e.clientY - look.y) / H * LOOK_GAIN, -1.35, 1.35);
     look = { x: e.clientX, y: e.clientY, id: e.pointerId };
   });
   const endLook = () => { look = null; };
@@ -890,8 +1001,10 @@ function spaceScreen() {
   const moveStick = (e) => {
     if (!joy || e.pointerId !== joy.id) return;
     const r = stick.getBoundingClientRect();
-    const dx = clamp((e.clientX - (r.left + r.width / 2)) / (r.width / 2), -1, 1);
-    const dy = clamp((e.clientY - (r.top + r.height / 2)) / (r.height / 2), -1, 1);
+    const dx0 = clamp((e.clientX - (r.left + r.width / 2)) / (r.width / 2), -1, 1);
+    const dy0 = clamp((e.clientY - (r.top + r.height / 2)) / (r.height / 2), -1, 1);
+    const dead = (v) => Math.abs(v) < 0.12 ? 0 : Math.sign(v) * (Math.abs(v) - 0.12) / 0.88;
+    const dx = dead(dx0), dy = dead(dy0);
     state.thrust.x = dx; state.thrust.y = -dy; // вверх = вперёд
     knob.style.transform = `translate(${dx * 26}px, ${dy * 26}px)`;
   };
@@ -924,7 +1037,7 @@ function spaceScreen() {
   });
   // клавиатура: WASD / стрелки
   const KEYS = { KeyW: "f", ArrowUp: "f", KeyS: "b", ArrowDown: "b", KeyA: "l", ArrowLeft: "l", KeyD: "r", ArrowRight: "r" };
-  const onKD = (e) => { const k = KEYS[e.code]; if (k && !keyThrust[k]) { keyThrust[k] = true; applyKeyThrust(); } };
+  const onKD = (e) => { if (state.modal) return; const k = KEYS[e.code]; if (k && !keyThrust[k]) { e.preventDefault(); keyThrust[k] = true; applyKeyThrust(); } };
   const onKU = (e) => { const k = KEYS[e.code]; if (k) { keyThrust[k] = false; applyKeyThrust(); } };
   if (window.__spaceKD) { removeEventListener("keydown", window.__spaceKD); removeEventListener("keyup", window.__spaceKU); }
   window.__spaceKD = onKD; window.__spaceKU = onKU;
@@ -951,18 +1064,32 @@ function spaceScreen() {
 
   // --- события ---
   function showOverlay({ cy, title, body, quote, actions }) {
+    if (state.modal) return Promise.resolve(null);
+    state.modal = true;
+    state.thrust = { x: 0, y: 0 };
+    cam.vel = { x: 0, y: 0, z: 0 };
+    Object.keys(keyThrust).forEach(k => keyThrust[k] = false);
+    applyKeyThrust();
+    const previousFocus = document.activeElement;
     const host = $("#overlay-host");
-    host.innerHTML = `<div class="overlay"><div class="card ${cy ? "cy" : ""}">
+    host.innerHTML = `<div class="overlay"><div class="card ${cy ? "cy" : ""}" role="dialog" aria-modal="true" aria-labelledby="overlay-title">
       <div class="eyebrow" style="color:${cy ? "var(--dim)" : "var(--amber)"}">${cy ? "система наблюдения" : "обнаружен сигнал"}</div>
-      <h3>${title}</h3>
+      <h3 id="overlay-title">${title}</h3>
       ${quote ? `<div class="quote serif">«${quote}»</div>` : ""}
       <div class="system" style="${cy ? "" : "color:var(--amber)"}">${body}</div>
       <div class="row">${actions.map(([label, go], i) => `<button class="button ${i === 0 && !cy ? "primary" : ""}" data-ov="${i}">${label}</button>`).join("")}</div>
     </div></div>`;
     const ov = host.querySelector(".overlay");
     const btns = [...host.querySelectorAll("[data-ov]")];
+    btns[0]?.focus();
+    ov.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab' || !btns.length) return;
+      const index = btns.indexOf(document.activeElement);
+      if (e.shiftKey && index === 0) { e.preventDefault(); btns[btns.length - 1].focus(); }
+      else if (!e.shiftKey && index === btns.length - 1) { e.preventDefault(); btns[0].focus(); }
+    });
     return new Promise((done) => {
-      btns.forEach((b, i) => b.onclick = () => { ov.remove(); done(actions[i][1]); });
+      btns.forEach((b, i) => b.onclick = () => { ov.remove(); state.modal = false; if (previousFocus?.isConnected) previousFocus.focus(); done(actions[i][1]); });
     });
   }
 
@@ -996,7 +1123,7 @@ function spaceScreen() {
       body: `ПОСЛЕДНЯЯ МЫСЛЬ ОБЪЕКТА ВОЗВРАЩАЕТСЯ ИЗ ТОЧКИ,<br>ГДЕ НЕТ НИ ЗЕМЛИ, НИ ЛУНЫ, НИ ТЕБЯ.`,
       actions: [["Передать память дальше", "send"], ["Оставить себе", "keep"]],
     });
-    if (go === "send") ending();
+    if (go === "send" || go === "keep") ending(go);
   }
 
   function toast(html) {
@@ -1008,17 +1135,17 @@ function spaceScreen() {
     setTimeout(() => el.remove(), 2600);
   }
 
-  function ending() {
+  function ending(choice = "send") {
     AudioLayer.fade(0.0001, 4);
     state.dead = true; cancelAnimationFrame(state.raf);
     flashOn();
     render(`
       <div class="screen">
         <div class="ending-wrap">
-          <div class="eyebrow">память передана · получатель не определён</div>
+          <div class="eyebrow">${choice === "keep" ? "память сохранена · свидетель не определён" : "память передана · получатель не определён"}</div>
           <h1 class="serif">Всё, что от меня<span class="ost">ОСТАЛОСЬ</span></h1>
           <div class="system">«Ты ещё успеешь?»</div>
-          <p class="faint" style="max-width:420px;margin:14px auto 0">Голос был твой. Ты спрашивал себя — но изнутри жизни это звучит как вопрос от кого-то другого. Теперь он летит дальше.</p>
+          <p class="faint" style="max-width:420px;margin:14px auto 0">${choice === "keep" ? "Ты сохранил этот голос. В темноте он звучит всё тише, но пока ещё принадлежит тебе." : "Голос был твой. Ты спрашивал себя — но изнутри жизни это звучит как вопрос от кого-то другого. Теперь он летит дальше."}</p>
           <div class="row center">
             <button class="button primary" data-go="restart">Начать снова</button>
             <button class="button ghost" data-go="title">Закрыть архив</button>
@@ -1038,6 +1165,7 @@ function spaceScreen() {
     document.removeEventListener("visibilitychange", onVisible);
     removeEventListener("keydown", onKD); removeEventListener("keyup", onKU);
     if (space3d) {
+      space3d.scene.background?.dispose();
       space3d.scene.traverse((o) => { o.geometry?.dispose(); o.material?.map?.dispose(); o.material?.dispose(); });
       space3d.renderer.dispose();
       space3d.renderer.forceContextLoss();
@@ -1050,6 +1178,7 @@ function spaceScreen() {
 // ---------- маршрутизация ----------
 let memIdx = 0;
 document.addEventListener("click", (e) => {
+  if (AudioLayer.ctx?.state === "suspended") AudioLayer.ctx.resume().catch(() => {});
   const choice = e.target.closest('[data-life]');
   if (choice) { LIFE = lifePool[Number(choice.dataset.life)]; chooseScreen(); return; }
   const go = e.target.closest("[data-go]")?.dataset.go;

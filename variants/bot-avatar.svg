@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="space"><stop stop-color="#182d2d"/><stop offset=".7" stop-color="#081314"/><stop offset="1" stop-color="#030708"/></radialGradient>
+    <radialGradient id="planet" cx=".35" cy=".22" r=".82"><stop stop-color="#899e90"/><stop offset=".28" stop-color="#344e4a"/><stop offset=".64" stop-color="#142a2a"/><stop offset="1" stop-color="#060d0e"/></radialGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#cfddd1" stop-opacity=".9"/><stop offset="1" stop-color="#6e9990" stop-opacity="0"/></linearGradient>
+    <filter id="blur"><feGaussianBlur stdDeviation="13"/></filter>
+    <clipPath id="disc"><circle cx="512" cy="543" r="246"/></clipPath>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#space)"/>
+  <circle cx="512" cy="512" r="412" fill="none" stroke="#93afa2" stroke-opacity=".15" stroke-width="2"/>
+  <circle cx="512" cy="543" r="258" fill="#6ba397" opacity=".14" filter="url(#blur)"/>
+  <circle cx="512" cy="543" r="246" fill="url(#planet)"/>
+  <g clip-path="url(#disc)" opacity=".32" fill="#8a9e89">
+    <path d="M297 396l54-28 42 14 18 30 49 3 13 32-29 19-2 29-39 4-10 30-48-7-24-32-31-12z"/>
+    <path d="M488 339l55-21 26 24 44-8 35 28-14 32 27 23-20 20-42-8-14 26-34-5-12-26-48-9-20-31z"/>
+    <path d="M580 464l39-17 33 17 33-8 26 34-11 42-37 8-24 36-29-17-7-37-32-19z"/>
+  </g>
+  <path d="M281 461a246 246 0 0 1 462 0" fill="none" stroke="url(#rim)" stroke-width="5" opacity=".8"/>
+  <path d="M234 461c94-35 177-48 278-48s184 13 278 48" fill="none" stroke="#b3cec0" stroke-width="2" opacity=".45"/>
+  <circle cx="512" cy="282" r="4" fill="#dae9dc" opacity=".8"/>
+  <path d="M512 224v27 M512 312v17 M454 282h21 M549 282h21" stroke="#a8bcb0" stroke-width="2" opacity=".48"/>
+  <g fill="#c0d3c6" opacity=".5"><circle cx="332" cy="310" r="2"/><circle cx="694" cy="353" r="2"/><circle cx="751" cy="598" r="2"/><circle cx="282" cy="615" r="2"/></g>
+</svg>
