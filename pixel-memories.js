@@ -1,70 +1,82 @@
-/* Пиксельные воспоминания: фон и персонаж на отдельных canvas. */
+/* Deterministic 16-bit memory renderer. No generated assets, no random drift. */
 function drawPixelMemory(scene, index, person) {
   const background = scene.querySelector('.pixel-background');
   const foreground = scene.querySelector('.pixel-actor');
   if (!background || !foreground) return;
   const b = background.getContext('2d'), a = foreground.getContext('2d');
-  const rect = (ctx, x, y, w, h, color) => { ctx.fillStyle = color; ctx.fillRect(x, y, w, h); };
-  const r = (x, y, w, h, c) => rect(b, x, y, w, h, c);
-  r(0, 0, 160, 120, '#303d3b');
-  if (index === 4) {
-    r(0, 0, 160, 63, '#687d7c'); r(0, 63, 160, 30, '#344f50'); r(0, 93, 160, 27, '#464a43');
-    for (let x = 0; x < 160; x += 24) r(x, 73 + x % 7, 14, 1, '#91a19a');
-  } else if (index === 2) {
-    r(0, 0, 160, 78, '#596d6e'); r(0, 78, 160, 42, '#343d39');
-    r(85, 23, 75, 65, '#293b3a'); r(90, 30, 70, 22, '#87928a');
-    for (let x = 94; x < 160; x += 17) r(x, 30, 3, 22, '#394b46');
-    r(0, 85, 160, 3, '#a49b7f');
-  } else {
-    for (let x = 0; x < 160; x += 16) r(x, 4, 1, 61, '#41504b');
-    r(0, 62, 160, 5, '#1a2524'); r(0, 67, 160, 53, '#3d4540');
-    for (let y = 72; y < 120; y += 10) r(0, y, 160, 1, '#27322f');
-    r(91, 10, 52, 48, '#192524'); r(95, 14, 44, 40, '#788f8b');
-    r(115, 14, 3, 40, '#354b48'); r(95, 33, 44, 3, '#354b48');
-    r(7, 30, 30, 38, '#202b28'); r(10, 33, 24, 3, '#707166'); r(10, 47, 24, 3, '#707166');
-    r(96, 81, 46, 5, '#74695a'); r(99, 86, 4, 22, '#484d43'); r(136, 86, 4, 22, '#484d43');
-    if (index === 0) {
-      r(38, 83, 46, 5, '#aeb9ac'); r(40, 88, 3, 18, '#aeb9ac'); r(80, 88, 3, 18, '#aeb9ac');
-      // Новорождённый в светлой пелёнке, без взрослого лица и волос.
-      r(49, 77, 25, 6, '#ded9c6'); r(52, 75, 8, 6, '#c5aa94'); r(60, 78, 11, 3, '#b9c8bd');
-    }
-    if (index === 3) { r(108, 75, 12, 5, '#161d1c'); r(111, 71, 6, 4, '#202b28'); }
-  }
-  if (index === 0) return; // Рождение: кроватка вместо случайного взрослого.
+  const W = 320, H = 180;
   const palettes = [
-    {hair:'#45382f',skin:'#c5aa94',coat:'#89968a'},
-    {hair:'#b1a07f',skin:'#d0b59e',coat:'#7e8990'},
-    {hair:'#292d2b',skin:'#987b68',coat:'#8d8173'},
-    {hair:'#80766a',skin:'#bba18e',coat:'#697e76'}
+    { sky: '#172729', deep: '#0a1418', floor: '#303d39', light: '#a8b9a9', accent: '#c6a47a', skin: '#bd967f', hair: '#3b302d', coat: '#667f7a' },
+    { sky: '#263337', deep: '#10191d', floor: '#3f4540', light: '#b3c3b5', accent: '#9ba86f', skin: '#cba48d', hair: '#514034', coat: '#7a8581' },
+    { sky: '#1b2931', deep: '#0b1117', floor: '#344348', light: '#9caeae', accent: '#bd816d', skin: '#a98270', hair: '#272d32', coat: '#536b7b' },
+    { sky: '#303135', deep: '#111317', floor: '#48433d', light: '#c3bba4', accent: '#b99a58', skin: '#c49a7d', hair: '#635044', coat: '#777267' },
   ];
-  const colors = palettes[(person.id || 0) % palettes.length];
-  const hair = index === 4 ? '#a6a397' : colors.hair;
-  const longerHair = person.gender === 'f';
-  const draw = (blink = false) => {
-    a.clearRect(0, 0, 160, 120);
-    const p = (x,y,w,h,c) => rect(a,x,y,w,h,c);
-    a.save();
-    // Ребёнок меньше взрослого; положение ног остаётся на полу.
-    if (index === 1) { a.translate(62, 108); a.scale(.72, .72); a.translate(-62, -108); }
-    p(51,106,22,3,'#1b2220'); p(54,94,7,13,'#3b4440'); p(64,94,7,13,'#3b4440');
-    p(53,105,9,3,'#302a27'); p(64,105,10,3,'#302a27');
-    p(52,73,21,24,'#222d2a'); p(54,75,17,20,colors.coat); p(49,77,5,17,colors.coat); p(73,77,4,17,colors.coat);
-    p(49,91,4,4,colors.skin); p(73,91,4,4,colors.skin); p(59,74,8,4,'#c5c7b2');
-    if (longerHair) { p(49,57,5,24,hair); p(71,57,5,24,hair); }
-    p(53,52,19,9,hair);
-    p(55,59,15,15,colors.skin);
-    p(59,74,7,3,colors.skin); // шея соединяет лицо с одеждой без тёмной полосы
-    p(54,54,17,6,hair); p(53,58,4,7,hair); p(68,58,4,7,hair);
-    p(58,65,2,blink ? 1 : 2,'#282b28'); p(66,65,2,blink ? 1 : 2,'#282b28'); p(61,70,4,1,'#987d70');
-    a.restore();
-  };
-  draw();
-  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    const blink = () => {
-      if (!foreground.isConnected) return;
-      if (!document.hidden) { draw(true); setTimeout(() => { if (foreground.isConnected) draw(); }, 140); }
-      setTimeout(blink, 4800);
-    };
-    setTimeout(blink, 4800);
+  const pal = palettes[Math.abs(person?.id || 0) % palettes.length];
+  const hash = (n) => Math.abs(Math.sin((person?.id || 0) * 91.7 + n * 17.13));
+  const rect = (ctx, x, y, w, h, color) => { ctx.fillStyle = color; ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); };
+  const line = (ctx, x1, y1, x2, y2, color, width = 2) => { ctx.strokeStyle = color; ctx.lineWidth = width; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); };
+  const text = (ctx, value, x, y, color) => { ctx.fillStyle = color; ctx.font = '8px monospace'; ctx.fillText(value, x, y); };
+  const symbol = String(person?.symbol || '').toLowerCase();
+
+  b.clearRect(0, 0, W, H);
+  a.clearRect(0, 0, W, H);
+  rect(b, 0, 0, W, H, pal.deep);
+  rect(b, 0, 0, W, 112, pal.sky);
+  for (let i = 0; i < 14; i++) {
+    const x = (hash(i) * W) | 0;
+    line(b, x, 12 + (hash(i + 30) * 70), x, 104, 'rgba(160,190,180,.12)', 2 + (i % 2));
   }
+
+  if (index === 0) {
+    // Birth: room, window, crib, no adult face.
+    rect(b, 0, 112, W, 68, pal.floor);
+    rect(b, 32, 27, 80, 70, '#101b1d'); rect(b, 40, 35, 64, 54, pal.light);
+    line(b, 72, 35, 72, 89, '#526764', 3); line(b, 40, 62, 104, 62, '#526764', 3);
+    rect(b, 126, 111, 112, 8, pal.light); rect(b, 132, 119, 5, 45, pal.light); rect(b, 227, 119, 5, 45, pal.light);
+    rect(b, 144, 102, 62, 12, '#ded6bd');
+    rect(a, 157, 91, 34, 10, '#d9d0b9'); rect(a, 163, 87, 14, 6, pal.skin); rect(a, 176, 92, 12, 4, '#b5c4b6');
+    return;
+  }
+
+  if (index === 1) {
+    // Childhood: domestic interior with an object that varies per life.
+    rect(b, 0, 116, W, 64, pal.floor);
+    rect(b, 226, 30, 62, 70, '#11191a'); rect(b, 232, 36, 50, 58, pal.light);
+    rect(b, 46, 101, 116, 8, '#8a765b'); rect(b, 55, 109, 6, 42, '#625441'); rect(b, 147, 109, 6, 42, '#625441');
+    if (symbol.includes('ключ') || symbol.includes('круж')) { rect(b, 195, 96, 11, 18, pal.accent); line(b, 201, 96, 214, 89, pal.accent, 3); }
+    else if (symbol.includes('письм') || symbol.includes('конверт')) { rect(b, 196, 91, 28, 19, '#a4b1a1'); line(b, 196, 91, 210, 103, pal.accent, 2); line(b, 224, 91, 210, 103, pal.accent, 2); }
+    else { rect(b, 198, 88, 16, 25, pal.accent); rect(b, 201, 84, 10, 5, pal.accent); }
+  } else if (index === 2) {
+    // Turning point: platform / road with a readable vanishing line.
+    rect(b, 0, 110, W, 70, pal.floor); line(b, 0, 124, W, 124, pal.light, 2);
+    for (let x = 0; x < W; x += 38) line(b, x, 135, x + 24, 135, '#69736c', 2);
+    rect(b, 218, 30, 72, 60, '#142126'); rect(b, 224, 37, 58, 44, pal.light);
+    line(b, 78, 105, 162, 105, pal.accent, 3); line(b, 120, 105, 120, 67, pal.accent, 2);
+    text(b, 'ОТПРАВЛЕНИЕ', 212, 104, pal.light);
+  } else if (index === 3) {
+    // Voice: room, phone light, empty space around the figure.
+    rect(b, 0, 116, W, 64, pal.floor); rect(b, 245, 36, 34, 68, '#151719');
+    rect(b, 252, 45, 20, 38, '#758b82'); rect(b, 257, 54, 10, 3, pal.accent);
+    rect(b, 42, 106, 94, 7, '#6f6554'); rect(b, 50, 113, 5, 38, '#4d4940'); rect(b, 124, 113, 5, 38, '#4d4940');
+    line(b, 160, 28, 160, 103, 'rgba(180,200,190,.16)', 2);
+  } else {
+    // Farewell / after: horizon, water and one distant light.
+    rect(b, 0, 0, W, 92, '#607576'); rect(b, 0, 92, W, 88, '#263d3e'); line(b, 0, 93, W, 93, pal.light, 1);
+    for (let y = 112; y < 170; y += 14) line(b, 0, y, W, y + ((y / 14) % 2 ? 2 : -2), 'rgba(150,180,170,.25)', 1);
+    rect(b, 265, 72, 4, 4, pal.accent); rect(b, 263, 70, 8, 8, 'rgba(201,168,106,.18)');
+  }
+
+  // Actor silhouette: pose and clothing vary deterministically by life and scene.
+  const child = index === 1;
+  const old = index >= 4;
+  const x = 130 + Math.round((hash(index + 80) - .5) * 70);
+  const base = 142;
+  const scale = child ? .74 : old ? .96 : 1;
+  const P = (xx, yy, ww, hh, c) => rect(a, x + xx * scale, base + yy * scale, ww * scale, hh * scale, c);
+  P(-18, 0, 36, 4, '#17201f'); P(-13, -30, 8, 30, pal.coat); P(5, -30, 8, 30, pal.coat);
+  P(-16, -56, 32, 29, pal.coat); P(-21, -50, 6, 20, pal.coat); P(15, -50, 6, 20, pal.coat);
+  P(-8, -72, 16, 17, pal.skin); P(-11, -79, 22, 9, pal.hair); P(-13, -72, 5, 14, pal.hair); P(8, -72, 5, 14, pal.hair);
+  P(-6, -62, 3, 3, '#1c2524'); P(5, -62, 3, 3, '#1c2524');
+  if (index === 3) { P(20, -38, 9, 15, '#202827'); P(23, -35, 3, 7, pal.accent); }
+  if (old) { line(a, x - 13, base - 38, x - 26, base - 13, pal.light, 2); line(a, x + 13, base - 38, x + 25, base - 13, pal.light, 2); }
 }
