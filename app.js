@@ -627,6 +627,8 @@ function spaceScreen() {
       renderer.setPixelRatio(Math.min(devicePixelRatio || 1, quality.dprCap));
       renderer.setSize(stage.clientWidth, stage.clientHeight);
       renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = coarse ? 0.82 : 0.9;
       renderer.domElement.className = 'space-webgl';
       canvas.insertAdjacentElement('beforebegin', renderer.domElement);
       const scene = new THREE.Scene();
@@ -640,18 +642,23 @@ function spaceScreen() {
       // Фиксированная последовательность сохраняет рисунок между запусками.
       let starSeed = 73841;
       const starRandom = () => { starSeed = (starSeed * 1664525 + 1013904223) >>> 0; return starSeed / 4294967296; };
-      const starCount = 2800;
+      const starCount = coarse ? 3200 : 4600;
       const starPositions = new Float32Array(starCount * 3);
       const starColors = new Float32Array(starCount * 3);
       const starSizes = new Float32Array(starCount);
       for (let i = 0; i < starCount; i++) {
-        const y = starRandom() * 2 - 1, angle = starRandom() * Math.PI * 2;
+         // Most stars sit in a soft galactic band; the sparse remainder keeps
+         // the poles from becoming completely empty. This reads closer to a
+         // catalogue sky than a uniformly scattered particle sphere.
+         const inBand = starRandom() < 0.74;
+         const y = inBand ? (starRandom() - 0.5) * 0.5 : starRandom() * 2 - 1;
+         const angle = starRandom() * Math.PI * 2;
         const r = Math.sqrt(1 - y * y), radius = 1800;
         starPositions.set([Math.cos(angle) * r * radius, y * radius, Math.sin(angle) * r * radius], i * 3);
-        const brightness = 0.24 + Math.pow(starRandom(), 3) * 0.76;
+         const brightness = 0.12 + Math.pow(starRandom(), 4.4) * 0.88;
         const warmth = starRandom();
         starColors.set([brightness * (warmth < .18 ? 1 : .83), brightness * .9, brightness * (warmth < .18 ? .72 : 1)], i * 3);
-        starSizes[i] = 1.2 + Math.pow(starRandom(), 5) * 3.8;
+         starSizes[i] = 0.7 + Math.pow(starRandom(), 5.5) * 2.8;
       }
       const starGeometry = new THREE.BufferGeometry();
       starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
@@ -663,7 +670,7 @@ function spaceScreen() {
         blending: THREE.AdditiveBlending,
          uniforms: { uTime: { value: 0 }, uOpacity: { value: 0.9 } },
         vertexColors: true,
-        vertexShader: `attribute float size; varying vec3 vColor; uniform float uTime; void main(){ vColor=color; vec4 mvPosition=modelViewMatrix*vec4(position,1.0); float pulse=0.82+0.18*sin(uTime*(0.35+size*.12)+position.x*.017); gl_PointSize=size*pulse; gl_Position=projectionMatrix*mvPosition; }`,
+         vertexShader: `attribute float size; varying vec3 vColor; uniform float uTime; void main(){ vColor=color; vec4 mvPosition=modelViewMatrix*vec4(position,1.0); float pulse=0.985+0.015*sin(uTime*(0.08+size*.025)+position.x*.003); gl_PointSize=clamp(size*pulse*(900.0/-mvPosition.z),0.55,3.8); gl_Position=projectionMatrix*mvPosition; }`,
          fragmentShader: `uniform float uOpacity; varying vec3 vColor; void main(){ float d=length(gl_PointCoord-vec2(.5)); float a=smoothstep(.5,.06,d); gl_FragColor=vec4(vColor,a*uOpacity); }`
       });
       const starField = new THREE.Points(starGeometry, starMaterial);
@@ -702,11 +709,11 @@ function spaceScreen() {
       };
       const nebulaGroup = new THREE.Group();
       const nebulaDefs = [
-        { p: [-560, 110, -720], s: [720, 420], hue: 205, opacity: .72, seed: 3 },
-        { p: [390, -120, -860], s: [620, 360], hue: 215, opacity: .52, seed: 9 },
-        { p: [-850, 310, 180], s: [540, 300], hue: 178, opacity: .43, seed: 17 },
-        { p: [720, 260, 520], s: [650, 360], hue: 32, opacity: .32, seed: 25 },
-        { p: [0, -420, -1050], s: [900, 300], hue: 210, opacity: .35, seed: 31 }
+         { p: [-560, 110, -720], s: [720, 420], hue: 205, opacity: .18, seed: 3 },
+         { p: [390, -120, -860], s: [620, 360], hue: 215, opacity: .12, seed: 9 },
+         { p: [-850, 310, 180], s: [540, 300], hue: 178, opacity: .09, seed: 17 },
+         { p: [720, 260, 520], s: [650, 360], hue: 32, opacity: .06, seed: 25 },
+         { p: [0, -420, -1050], s: [900, 300], hue: 210, opacity: .08, seed: 31 }
       ];
       const nebulaSprites = nebulaDefs.map((n, i) => {
         const material = new THREE.SpriteMaterial({ map: nebulaTexture(n.hue, n.seed), transparent: true, depthWrite: false, depthTest: false, blending: THREE.NormalBlending, opacity: n.opacity * .72, color: 0xffffff });
@@ -715,7 +722,7 @@ function spaceScreen() {
         nebulaGroup.add(sprite); return sprite;
       });
       scene.add(nebulaGroup);
-      scene.add(new THREE.AmbientLight(0x4f6075, 0.55));
+       scene.add(new THREE.AmbientLight(0x4f6075, 0.28));
       const station = new THREE.Group();
       const metal = new THREE.MeshStandardMaterial({ color: 0x6b736f, roughness: .9, metalness: .2 });
       const panelMat = new THREE.MeshStandardMaterial({ color: 0x2b3431, roughness: .8, metalness: .6 });
@@ -805,7 +812,7 @@ void main(){
           texture.minFilter = THREE.LinearMipmapLinearFilter;
         }
         const spec = materialSpec[body.name] || { roughness: .96, metalness: 0 };
-        const material = body.sun ? makeSunMaterial(scene, texture) : new THREE.MeshStandardMaterial({ map: texture, roughness: spec.roughness, metalness: spec.metalness, bumpMap: spec.bump ? texture : null, bumpScale: spec.bump || 0 });
+        const material = body.sun ? makeSunMaterial(scene, texture) : new THREE.MeshStandardMaterial({ map: texture, color: 0xc8d0ca, roughness: spec.roughness, metalness: spec.metalness, bumpMap: spec.bump ? texture : null, bumpScale: spec.bump || 0 });
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.set(body.x, body.y, body.z); mesh.scale.setScalar(body.r);
         scene.add(mesh); meshes.push(mesh);
@@ -820,8 +827,8 @@ void main(){
           ];
           ringBands.forEach(([inner, outer, opacity], index) => {
             const material = new THREE.MeshStandardMaterial({
-              color: index % 3 === 0 ? 0xb8ae98 : index % 3 === 1 ? 0x8f8878 : 0xc8bfa8,
-              roughness: .92, metalness: 0, side: THREE.DoubleSide,
+              color: index % 3 === 0 ? 0xa99f89 : index % 3 === 1 ? 0x797565 : 0xbab19a,
+              roughness: 1, metalness: 0, side: THREE.DoubleSide,
               transparent: true, opacity, depthWrite: false
             });
             const band = new THREE.Mesh(new THREE.RingGeometry(body.r * inner, body.r * outer, 128), material);
@@ -842,7 +849,7 @@ void main(){
         { parent: 'НЕПТУН', r: 0.2, d: 3.5, speed: 0.55 },
       ].map(m => {
  const parentMesh = meshes[BODIES.findIndex(b => b.name === m.parent)];
-        const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x9a9a92, roughness: 1 }));
+         const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x747b78, roughness: 1, metalness: 0 }));
  mesh.scale.setScalar(m.r);
  scene.add(mesh);
         return { mesh, parentMesh, d: m.d, speed: m.speed, phase: Math.random() * Math.PI * 2 };
