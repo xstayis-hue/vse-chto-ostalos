@@ -169,7 +169,7 @@ const generatedLifePool = Array.from({length:100}, (_, i) => {
     desire, last, memories:[
       { y:String(year), h: gender === 'f' ? 'Ты появилась на свет.' : 'Ты появился на свет.', p:`${place}. Этот день сохранился только в чужой памяти.`, fx:'rain', n:18 },
       { y:String(year+7), h: kitchen, p: voice, fx:'ice', n:0 },
-      { y:String(year+24), h: 'Поезд ещё стоял у платформы.', p: gender === 'f' ? 'Ты так и не вошла в вагон. Причина этого решения не сохранилась.' : 'Ты так и не вошёл в вагон. Причина этого решения не сохранилась.', fx:'split', n:0, image: gender === 'm' && i % 4 === 1 ? 'assets/memory-platform-alt.jpg' : null },
+      { y:String(year+24), h: 'Поезд ещё стоял у платформы.', p: gender === 'f' ? 'Ты так и не вошла в вагон. Причина этого решения не сохранилась.' : 'Ты так и не вошёл в вагон. Причина этого решения не сохранилась.', fx:'split', n:0 },
       { y:String(year+43), h: callText, p: callDesc, fx:'room', n:0 },
       { y:String(year+68), h: seaText, p: seaDesc, fx:'sea', n:0 }
     ] };
@@ -211,7 +211,6 @@ function persistRun(status = "active") {
       status,
       lifeId: LIFE?.id,
       choices: RUN.choices,
-      signals: RUN.signals,
       expeditions: RUN.expeditions,
       memories: [...RUN.memories],
       scene: Number.isInteger(memIdx) ? memIdx : 0,
@@ -233,7 +232,6 @@ function restoreRun() {
   if (!saved) return false;
   LIFE = saved.life;
   RUN.choices = saved.choices || {};
-  RUN.signals = saved.signals || [];
   RUN.expeditions = saved.expeditions || [];
   RUN.memories = new Set(saved.memories || []);
   memIdx = clamp(Number(saved.scene) || 0, 0, LIFE.memories.length - 1);
@@ -354,7 +352,6 @@ function pickLives() {
   offeredLives = shuffled.slice(0, 5);
   LIFE = offeredLives[0];
   RUN.choices = {};
-  RUN.signals = [];
   RUN.memories = new Set();
   RUN.expeditions = [];
   memIdx = 0;
@@ -800,7 +797,7 @@ void main(){
       };
       const meshes = [];
       for (const body of BODIES) {
-        const texture = body.sun ? loader.load('assets/sun-api-candidate.png') : loader.load(`assets/${names[body.name]}.jpg`);
+        const texture = body.sun ? loader.load('assets/sun-api-candidate.jpg') : loader.load(`assets/${names[body.name]}.jpg`);
         if (texture) {
           texture.colorSpace = THREE.SRGBColorSpace;
           texture.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
@@ -873,8 +870,8 @@ void main(){
     dead: false, modal: false, raf: 0, t: 0, last: 0,
     thrust: { x: 0, y: 0 },
     events: { earth: false, moon: false, far: false },
-    scanT: 0, nearbyExpedition: null, expeditionPrompt: null,
-    pacing: { next: 78, beat: 0, lastMessage: 0, lastMovement: 0 },
+    nearbyExpedition: null,
+    pacing: { next: 78, beat: 0, lastMovement: 0 },
     braking: false,
   };
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -909,7 +906,6 @@ void main(){
     if (speed > 0.18) p.lastMovement = state.t;
     if (state.modal || state.t < p.next || state.t - p.lastMovement < 8) return;
     p.beat += 1;
-    p.lastMessage = state.t;
     const branch = branchSignalCopy();
     const quietBeats = [
       { line: "ЗВЁЗДЫ НА МГНОВЕНИЕ СТАЛИ БЛИЖЕ.", freq: 260 },
@@ -1101,11 +1097,7 @@ void main(){
     { id: "echo-orbit", name: "ЭХО ПОСЛЕДНЕЙ МЫСЛИ", x: 22, y: -2.5, z: 12, radius: 3.4, title: "МЫСЛЬ НЕ ИМЕЕТ ВЛАДЕЛЬЦА", body: "ОНА ПОВТОРЯЕТСЯ КАЖДЫЕ 47 СЕКУНД. ТЕПЕРЬ В НЕЙ ЕСТЬ ТВОЙ ГОЛОС.", effect: "echo-fragment" },
   ];
   function expeditionCount() { return RUN.expeditions.length; }
-  function updateExpeditionHud() {
-    const el = $("#expedition-state");
-    if (el) el.textContent = `ЭКСПЕДИЦИЙ: ${expeditionCount()} / ${EXPEDITIONS.length}`;
-  }
-  updateExpeditionHud();
+
   function expeditionDistance(exp) {
     return Math.hypot(cam.pos.x - exp.x, cam.pos.y - exp.y, cam.pos.z - exp.z) - exp.radius;
   }
@@ -1122,7 +1114,6 @@ void main(){
       RUN.expeditions.push(exp.id);
       RUN.memories.add(exp.effect);
       persistRun();
-      updateExpeditionHud();
       Haptics.notification("success");
       toast(`ОБЪЕКТ СОХРАНЁН · ${expeditionCount()} / ${EXPEDITIONS.length}<br>НОВЫЙ СИГНАЛ ДОБАВЛЕН В АРХИВ.`);
     }
@@ -1148,12 +1139,9 @@ void main(){
     q.dprCap = level === "economy" ? 1 : level === "balanced" ? 1.25 : (matchMedia('(pointer: coarse)').matches ? 1.25 : 2);
     space3d.renderer.setPixelRatio(Math.min(devicePixelRatio || 1, q.dprCap));
     q.starOpacity = level === "economy" ? 0.62 : level === "balanced" ? 0.78 : 0.9;
-    if (space3d.starMaterial) space3d.starMaterial.opacity = q.starOpacity;
     space3d.nebulaSprites?.forEach((sprite) => {
       sprite.material.opacity = sprite.userData.base * (level === "economy" ? 0.55 : level === "balanced" ? 0.72 : 1);
     });
-    const stateEl = $("#quality-state");
-    if (stateEl) stateEl.textContent = `РЕНДЕР: ${level.toUpperCase()}`;
   }
   function adaptQuality(dt) {
     const q = space3d.quality;
@@ -1297,7 +1285,6 @@ void main(){
     const setHud = (id, value) => { const el = $(id); if (el) el.textContent = value; };
     setHud("#d-earth", dE.toFixed(1) + " R");
     setHud("#d-sun", dS.toFixed(1) + " R");
-    setHud("#d-sun-compact", dS.toFixed(1) + " R");
     setHud("#v-now", v.toFixed(1));
     const nearEl = $("#d-near");
     if (nearEl) nearEl.textContent = `${nearest.name} · ${nearest.d.toFixed(1)} R`;
@@ -1445,7 +1432,6 @@ void main(){
   function eventEarthFar() {
     AudioLayer.ping(320, 1.2, 0.08);
     const branch = branchSignalCopy();
-    RUN.signals.push({ source: "earth-far", branch: branch.code });
     persistRun();
     const signalState = $("#signal-state");
     if (signalState) signalState.textContent = `СИГНАЛ: ${branch.title}`;
@@ -1459,7 +1445,6 @@ void main(){
   async function eventMoon() {
     AudioLayer.whisper();
     const branch = branchSignalCopy();
-    RUN.signals.push({ source: "moon", branch: signalBranch() });
     persistRun();
     const signalState = $("#signal-state");
     if (signalState) signalState.textContent = `СИГНАЛ: ${signalBranch()}`;
@@ -1478,7 +1463,6 @@ void main(){
   async function eventSignal() {
     AudioLayer.whisper();
     const branch = branchSignalCopy();
-    RUN.signals.push({ source: "deep", branch: signalBranch() });
     persistRun();
     const signalState = $("#signal-state");
     if (signalState) signalState.textContent = `СИГНАЛ: ${signalBranch()}`;
