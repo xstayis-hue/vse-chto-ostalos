@@ -102,6 +102,7 @@ function typeText(el, text, speed = 26) {
   return new Promise((done) => {
     el.setAttribute("aria-live", "polite");
     el.textContent = "";
+    let cur = null;
     let complete = false;
     const showAll = () => {
       if (complete || !el.isConnected) return;
@@ -112,7 +113,7 @@ function typeText(el, text, speed = 26) {
     };
     el.addEventListener("click", showAll, { once: true });
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) { showAll(); return; }
-    const cur = document.createElement("i");
+    cur = document.createElement("i");
     cur.className = "cursor";
     el.appendChild(cur);
     let i = 0;
@@ -241,6 +242,9 @@ function restoreRun() {
 }
 function clearSavedRun() {
   try { localStorage.removeItem(RUN_KEY); } catch { /* storage is optional */ }
+}
+function hasActiveRun() {
+  return Boolean(readSavedRun());
 }
 function hasMemory(...effects) { return effects.some((effect) => RUN.memories.has(effect)); }
 function runSummary() {
@@ -660,10 +664,10 @@ function spaceScreen() {
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
-        uniforms: { uTime: { value: 0 } },
+         uniforms: { uTime: { value: 0 }, uOpacity: { value: 0.9 } },
         vertexColors: true,
         vertexShader: `attribute float size; varying vec3 vColor; uniform float uTime; void main(){ vColor=color; vec4 mvPosition=modelViewMatrix*vec4(position,1.0); float pulse=0.82+0.18*sin(uTime*(0.35+size*.12)+position.x*.017); gl_PointSize=size*pulse; gl_Position=projectionMatrix*mvPosition; }`,
-        fragmentShader: `varying vec3 vColor; void main(){ float d=length(gl_PointCoord-vec2(.5)); float a=smoothstep(.5,.06,d); gl_FragColor=vec4(vColor,a); }`
+         fragmentShader: `uniform float uOpacity; varying vec3 vColor; void main(){ float d=length(gl_PointCoord-vec2(.5)); float a=smoothstep(.5,.06,d); gl_FragColor=vec4(vColor,a*uOpacity); }`
       });
       const starField = new THREE.Points(starGeometry, starMaterial);
       starField.frustumCulled = false;
@@ -1255,7 +1259,7 @@ void main(){
       starField.rotation.y = state.t * 0.00018;
       starMaterial.uniforms.uTime.value = state.t;
       // Едва заметное изменение плотности звёзд заменяет постоянные маркеры.
-      starMaterial.opacity = space3d.quality.starOpacity * (0.94 + Math.sin(state.t * 0.035) * 0.06);
+      starMaterial.uniforms.uOpacity.value = space3d.quality.starOpacity * (0.94 + Math.sin(state.t * 0.035) * 0.06);
       space3d.sunUniforms.uTime.value = state.t;
       space3d.moons.forEach(m => {
         const a = m.phase + state.t * m.speed;
@@ -1593,7 +1597,14 @@ document.addEventListener("click", (e) => {
   Haptics.selection();
   if (go === "title") titleScreen();
   if (go === "resume") restoreRun();
-  if (go === "choose" || go === "reroll") { pickLives(); chooseScreen(); }
+  if (go === "choose") {
+    if (hasActiveRun() && !confirm("Незавершённая запись будет заменена новой. Продолжить?")) return;
+    pickLives(); chooseScreen();
+  }
+  if (go === "reroll") {
+    if (hasActiveRun() && !confirm("Незавершённая запись будет заменена новой пятёркой. Продолжить?")) return;
+    pickLives(); chooseScreen();
+  }
   if (go === "mem") { memIdx = 0; memoryScreen(0); }
   if (go === "next") { memIdx++; persistRun(); memoryScreen(memIdx); }
   if (go === "death") deathScreen();

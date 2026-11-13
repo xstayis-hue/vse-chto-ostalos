@@ -16,6 +16,8 @@ This file records the audit summary used for the current cleanup pass.
 - Removed dead memory effect variables and unused scene state.
 - Improved mobile memory layout, pixel canvas aspect ratio and text contrast.
 - Added `CREDITS.md`.
+- Fixed reduced motion text rendering, star opacity uniform, generated life numbering, overwrite confirmation and extended syntax coverage to `pixel-memories.js`.
+- Added repository `origin`, `.gitignore`, package version/engine metadata and removed unused memory image assets.
 
 ## Remaining follow-up
 

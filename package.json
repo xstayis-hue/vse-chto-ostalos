@@ -1,7 +1,9 @@
 {
   "name": "vse-chto-ostalos",
+  "version": "0.1.0",
+  "engines": { "node": ">=20" },
   "private": true,
   "scripts": {
-    "test": "node --check app.js && node --check content.js && node --check flight.js && node --test flight.test.cjs"
+    "test": "node --check app.js && node --check content.js && node --check flight.js && node --check pixel-memories.js && node --test flight.test.cjs"
   }
 }
