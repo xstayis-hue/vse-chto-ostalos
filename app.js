@@ -100,17 +100,28 @@ const AudioLayer = {
 function typeText(el, text, speed = 26) {
   if (!el) return Promise.resolve(); // экран уже сменился — печатать некуда
   return new Promise((done) => {
+    el.setAttribute("aria-live", "polite");
     el.textContent = "";
+    let complete = false;
+    const showAll = () => {
+      if (complete || !el.isConnected) return;
+      complete = true;
+      cur?.remove();
+      el.textContent = text;
+      done();
+    };
+    el.addEventListener("click", showAll, { once: true });
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) { showAll(); return; }
     const cur = document.createElement("i");
     cur.className = "cursor";
     el.appendChild(cur);
     let i = 0;
     (function step() {
       if (!el.isConnected) { done(); return; } // экран сменился посреди печати
-      if (i < text.length) {
+      if (i < text.length && !complete) {
         cur.insertAdjacentText("beforebegin", text[i++]);
         setTimeout(step, speed);
-      } else { cur.remove(); done(); }
+      } else if (!complete) { complete = true; cur.remove(); done(); }
     })();
   });
 }
@@ -139,8 +150,6 @@ const surnames = ['Вельская','Вельский','Миронова','Ми
 const places = ['Белое море','Казань','Владивосток','Тбилиси','Минск','Калининград','Алматы','Пермь','Мурманск','Томск'];
 const desires = ['вернуться к морю','услышать знакомый голос','сохранить дом','посадить сад','увидеть северное сияние','найти потерянное письмо','дождаться весны','простить себя','научиться играть','увидеть мир'];
 const endings = ['Я ещё успею','Как хорошо, что мы встретились','Я помню этот свет','Ничего страшного','Передай им привет','Пусть будет весна','Я почти вспомнил','Спасибо за всё','Я дома','Завтра будет лучше'];
-const childhood = ['В окне дрожал дождь.','Двор пах после грозы.','На подоконнике стояла чашка.','Первый снег растаял на ладони.','Дома всегда горел свет.','Поезд уходил за горизонт.','Море звучало даже ночью.','На полу лежали цветные карандаши.','Кто-то тихо пел на кухне.','Солнце оставляло полосы на стене.'];
-const middle = ['Однажды пришлось выбирать между домом и дорогой.','Встреча на остановке изменила всё.','Долгие годы проходили спокойно.','Мечта оказалась дальше, чем казалось.','Однажды пришло письмо без обратного адреса.','Рядом оказался человек, которого не ждали.','Работа отнимала время, но давала надежду.','В незнакомом городе появилось чувство дома.','Одно решение сохранилось в памяти навсегда.','Потерянное не всегда удаётся вернуть.'];
 const generatedLifePool = Array.from({length:100}, (_, i) => {
   const gender = i % 2 ? 'm' : 'f';
   const name = `${firstNames[i % 20]} ${surnames[i % 20]}`;
@@ -149,8 +158,6 @@ const generatedLifePool = Array.from({length:100}, (_, i) => {
   const year = 1940 + (i * 7 % 26);
   const desire = desires[Math.floor(i / 10)];
   const last = endings[(i * 7) % 10];
-  const g = gender === 'f' ? ['ты','ты'] : ['ты','ты'];
-  const pick = (arr, k) => arr[(i * k + Math.floor(i / 7) * 3) % arr.length];
   const kitchen = ['На кухне кто-то тихо пел.','В коридоре хлопнула дверь.','Чай остыл, а никто не пришёл.','Кто-то переставил чужие вещи на полку.','Ночью ворчал холодильник.'][i % 5];
   const voice = ['Голос теряется раньше, чем мелодия.','Некоторые слова так и не были сказаны.','Имя звучало чужим, хотя было твоим.','Ты помнил интонацию, но не смысл.','Звонок прервался на полуслове.'][(i * 3) % 5];
   const callText = ['Ночью раздался звонок.','Телефон зазвонил, когда ты уже спал.','Номер был знакомым, но трубку никто не взял.','Письмо пришло вместо звонка.','Дверь открыли, а за ней никого.'][(i * 2) % 5];
@@ -250,7 +257,19 @@ function runSummary() {
 function resultText() {
   const summary = runSummary();
   const branch = signalBranch();
-  return `Я прожил жизнь ${LIFE.name} в «Всё, что от меня ОСТАЛОСЬ». В памяти осталось: ${summary.retained} фрагм. Экспедиций: ${summary.expeditions}. Архив восстановлен на ${summary.archivePercent}%. Ветка сигнала: ${branch}.`;
+  const verb = LIFE.gender === "f" ? "прожила" : "прожил";
+  return `Я ${verb} жизнь ${LIFE.name} в «Всё, что от меня ОСТАЛОСЬ». В памяти осталось: ${summary.retained} фрагментов. Экспедиций: ${summary.expeditions}. Архив восстановлен на ${summary.archivePercent}%. Ветка сигнала: ${branch}.`;
+}
+const CHOICE_LABELS = {
+  keep: "сохранить",
+  release: "отпустить",
+  stay: "остаться",
+  leave: "уехать",
+  answer: "ответить",
+  ignore: "промолчать",
+};
+function readableChoices() {
+  return Object.values(RUN.choices).map((id) => CHOICE_LABELS[id] || id).join(" · ") || "решения не сохранены";
 }
 function resultCardData() {
   const summary = runSummary();
@@ -400,12 +419,6 @@ async function memoryScreen(idx) {
   const m = LIFE.memories[idx];
   const total = LIFE.memories.length;
   const choices = m.choices || [];
-  const rain = m.fx === "rain"
-    ? Array.from({ length: m.n }, () => `<i style="left:${Math.random() * 100}%;animation-duration:${0.7 + Math.random() * 0.9}s;animation-delay:${Math.random() * 1.2}s"></i>`).join("")
-    : "";
-  const cracks = m.fx === "ice"
-    ? Array.from({ length: 9 }, (_, k) => `<i style="top:${6 + k * 10.5}%;left:${Math.random() * 20}%;transform:rotate(${(Math.random() * 24 - 12).toFixed(1)}deg);animation-delay:${(k * 0.28).toFixed(2)}s"></i>`).join("")
-    : "";
   render(`
     <div class="memory-stage">
       <div style="padding: calc(16px + env(safe-area-inset-top)) 20px 0; display:flex; justify-content:space-between; gap:12px">
@@ -1218,7 +1231,6 @@ void main(){
       draws.push({ b, d });
     }
     draws.sort((a, b) => b.d - a.d);
-    let moonHit = null;
     for (const it of draws) {
       const b = it.b;
       const o = {
@@ -1228,7 +1240,6 @@ void main(){
         sun: b.sun,
       };
       const res = space3d ? project(b, B) : drawPlanet(b, B, o);
-      if (b === MOON) moonHit = res;
       // приближение к телу: одноразовое системное сообщение
     }
 
@@ -1502,9 +1513,7 @@ void main(){
     const endingText = choice === "keep"
       ? `${summary.choseReturn ? "Ты вернулся к Земле, но Земля не ответила. " : "Ты сохранил "}${retained ? "часть этой жизни" : "только тишину"}. В темноте она звучит всё тише, но пока ещё принадлежит тебе.`
       : `${summary.answered ? "Сигнал ответил твоим голосом. " : "Канал остался пустым. "}Ты отправил память дальше — ${retained ? "вместе с тем, что успел сохранить" : "почти без следа"}. Теперь она летит туда, где нет получателя.`;
-    const choiceText = Object.values(RUN.choices).length
-      ? Object.values(RUN.choices).join(" · ")
-      : "решения не сохранены";
+    const choiceText = readableChoices();
     render(`
       <div class="screen">
         <div class="ending-wrap">
@@ -1551,7 +1560,6 @@ document.addEventListener("click", (e) => {
   const decision = e.target.closest("[data-choice]");
   if (decision) {
     Haptics.impact("light");
-    const scene = LIFE.memories[memIdx];
     RUN.choices[memIdx] = decision.dataset.choice;
     RUN.memories.add(decision.dataset.effect);
     persistRun();
@@ -1561,13 +1569,13 @@ document.addEventListener("click", (e) => {
     });
     const advance = stage.querySelector(".scene-foot [data-go]");
     if (advance) advance.disabled = false;
-    if (scene) scene.selected = decision.dataset.choice;
     return;
   }
   if (e.target.closest("[data-share]")) {
     Haptics.impact("medium");
     const text = resultText();
-    if (TG?.switchInlineQuery) TG.switchInlineQuery(text, ["users", "groups", "channels"]);
+    const shareUrl = `${location.origin}${location.pathname}`;
+    if (TG?.openTelegramLink) TG.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(text)}`);
     else if (navigator.share) navigator.share({ title: "Всё, что от меня ОСТАЛОСЬ", text }).catch(() => {});
     else navigator.clipboard?.writeText(text).then(() => alert("Результат скопирован"), () => {});
     return;
