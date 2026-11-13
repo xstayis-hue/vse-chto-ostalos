@@ -5,6 +5,11 @@
 // ---------- Telegram Mini App ----------
 const TG = window.Telegram?.WebApp;
 if (TG) { TG.ready(); TG.expand(); TG.setHeaderColor?.('#030507'); TG.setBackgroundColor?.('#030507'); TG.disableVerticalSwipes?.(); }
+const TG_USER = TG?.initDataUnsafe?.user || null;
+const OBSERVER_NAME = TG_USER?.first_name || TG_USER?.username || "Наблюдатель";
+function observerLabel() {
+  return TG_USER ? `Наблюдатель · ${OBSERVER_NAME}` : "Наблюдатель";
+}
 const Haptics = {
   impact(style = "light") { TG?.HapticFeedback?.impactOccurred?.(style); },
   selection() { TG?.HapticFeedback?.selectionChanged?.(); },
@@ -93,6 +98,19 @@ const AudioLayer = {
     const f = C.createBiquadFilter(); f.type = "bandpass"; f.frequency.value = 900; f.Q = 2;
     const g = C.createGain(); g.gain.value = 0.5;
     s.connect(f); f.connect(g); g.connect(C.destination); s.start();
+  },
+  memoryCue(index) {
+    if (!this.ctx) return;
+    const C = this.ctx;
+    const now = C.currentTime;
+    const gain = C.createGain(); gain.gain.setValueAtTime(0.0001, now); gain.gain.exponentialRampToValueAtTime(0.035, now + .35); gain.gain.exponentialRampToValueAtTime(0.0001, now + 3.8); gain.connect(C.destination);
+    const filter = C.createBiquadFilter(); filter.type = index === 3 ? "bandpass" : "lowpass"; filter.frequency.value = [420, 680, 160, 920, 240, 110][index] || 260; filter.Q.value = index === 3 ? 5 : .7; filter.connect(gain);
+    const osc = C.createOscillator(); osc.type = index === 2 ? "triangle" : "sine"; osc.frequency.setValueAtTime([130, 220, 92, 440, 78, 52][index] || 140, now); osc.frequency.exponentialRampToValueAtTime([180, 330, 70, 520, 55, 38][index] || 190, now + 3.6); osc.connect(filter); osc.start(now); osc.stop(now + 4);
+    if (index === 0 || index === 4) {
+      const len = Math.floor(C.sampleRate * 3.6), buf = C.createBuffer(1, len, C.sampleRate), data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len) * .16;
+      const noise = C.createBufferSource(); noise.buffer = buf; const nf = C.createBiquadFilter(); nf.type = "bandpass"; nf.frequency.value = index === 0 ? 1200 : 360; nf.Q.value = .45; noise.connect(nf); nf.connect(gain); noise.start(now); noise.stop(now + 3.6);
+    }
   }
 };
 
@@ -373,6 +391,7 @@ async function titleScreen() {
   render(`
     <div class="screen title-screen">
       <div class="title-topline"><span>ЦИКЛ / 047</span><span>ПОСЛЕ ЧЕЛОВЕКА</span></div>
+      <div class="observer-badge">${observerLabel()}</div>
       <div class="scripture-mark"><span>«Что Я делаю, теперь ты не знаешь, а уразумеешь после.»</span><small>Ин. 13:7</small></div>
       <div class="title-wrap">
         <div class="eyebrow">запись найдена · отправитель неизвестен</div>
@@ -393,7 +412,7 @@ async function chooseScreen() {
   render(`
     <div class="screen archive-screen">
       <div class="archive-list">
-         <div class="archive-header"><span>АРХИВ · 01</span><span>● СВЯЗЬ</span></div>
+         <div class="archive-header"><span>АРХИВ · 01</span><span>${observerLabel()}</span></div>
          <div class="meta-progress">ПРОЖИТО ЖИЗНЕЙ: ${meta.lives} · ЭКСПЕДИЦИЙ: ${meta.expeditions.length}/${EXPEDITION_IDS.length} · ПАМЯТЬ: ${archivePercent(meta)}%</div>
         <div class="archive-title serif">Кем ты был<br><i>до тишины?</i></div>
         <div class="archive-hint">пять записей. одна из них — ты.</div>
@@ -409,11 +428,11 @@ async function chooseScreen() {
    <div class="archive-last"><span class="archive-last-label">последняя мысль · запись повреждена</span>«${current.last}»</div>
           <div class="archive-actions">
      <button class="button primary" data-go="mem">Прожить эту жизнь <span>↗</span></button>
-     <button class="button ghost" data-go="reroll">Другая пятёрка</button>
    </div>
         </div>
       </div>
     </div>`);
+  AudioLayer.memoryCue(idx);
 }
 
 async function memoryScreen(idx) {
