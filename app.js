@@ -390,8 +390,7 @@ async function titleScreen() {
   const resumeLabel = saved ? `Продолжить · воспоминание ${String((saved.scene || 0) + 1).padStart(2, "0")} / ${String(saved.life.memories.length).padStart(2, "0")}` : "";
   render(`
     <div class="screen title-screen">
-      <div class="title-topline"><span>ЦИКЛ / 047</span><span>ПОСЛЕ ЧЕЛОВЕКА</span></div>
-      <div class="observer-badge">${observerLabel()}</div>
+      <div class="title-topline"><span>ЦИКЛ / 748 395 322 441</span><span>ПОСЛЕ ЧЕЛОВЕКА</span></div>
       <div class="scripture-mark"><span>«Что Я делаю, теперь ты не знаешь, а уразумеешь после.»</span><small>Ин. 13:7</small></div>
       <div class="title-wrap">
         <div class="eyebrow">запись найдена · отправитель неизвестен</div>
@@ -402,7 +401,7 @@ async function titleScreen() {
           ${saved ? '<button class="button ghost" data-go="choose">Новая запись</button>' : ""}
         </div>
       </div>
-      <div class="title-bottomline"><span>СИСТЕМА НЕ ОБНАРУЖИЛА ВЛАДЕЛЬЦА</span><span>НАУШНИКИ РЕКОМЕНДУЮТСЯ</span></div>
+      <div class="title-bottomline"><span>${observerLabel()}</span><span>НАУШНИКИ РЕКОМЕНДУЮТСЯ</span></div>
     </div>`);
 }
 

@@ -4,6 +4,6 @@
   "engines": { "node": ">=20" },
   "private": true,
   "scripts": {
-    "test": "node --check app.js && node --check content.js && node --check flight.js && node --check pixel-memories.js && node --test flight.test.cjs"
+    "test": "node --check app.js && node --check content.js && node --check flight.js && node --check pixel-memories.js && node --test flight.test.cjs content.test.cjs"
   }
 }

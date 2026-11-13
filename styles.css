@@ -26,16 +26,6 @@
   line-height: 1.4;
   text-align: right;
 }
-.observer-badge {
-  position: absolute;
-  z-index: 3;
-  top: calc(max(28px, env(safe-area-inset-top)) + 4px);
-  left: 20px;
-  color: #8fa59d;
-  font: 9px "Courier New", monospace;
-  letter-spacing: .14em;
-  text-transform: uppercase;
-}
 .scene-scripture {
   position: absolute;
   z-index: 3;
