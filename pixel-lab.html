@@ -17,11 +17,17 @@
     main { padding:18px; }
     .single { display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap; margin-bottom:30px; }
     .frame { display:grid; gap:8px; color:var(--dim); }
+    .frame .stack { position:relative; line-height:0; border:1px solid var(--line); background:#101719; overflow:hidden; display:block; max-width:100%; }
+    .frame .stack canvas { position:absolute; left:0; top:0; display:block; max-width:100%; }
+    .frame .stack canvas:first-child { position:relative; }
     .frame canvas { display:block; width:480px; max-width:90vw; height:auto; image-rendering:pixelated; border:1px solid var(--line); background:#101719; }
     .frame b { color:var(--ink); font-weight:400; }
     .sheet { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px; }
     .thumb { min-width:0; padding:8px; background:var(--panel); border:1px solid var(--line); }
     .thumb canvas { display:block; width:100%; height:auto; image-rendering:pixelated; background:#101719; }
+    .thumb .stack { position:relative; overflow:hidden; line-height:0; border:1px solid var(--line); }
+    .thumb .stack canvas { position:absolute; inset:0; width:100%; height:100%; }
+    .thumb .stack canvas:first-child { position:relative; }
     .thumb div { display:flex; justify-content:space-between; gap:8px; padding-top:7px; color:var(--dim); font-size:10px; }
     .thumb b { color:var(--ink); font-weight:400; }
   </style>
@@ -39,8 +45,15 @@
     <section class="single" id="single"></section>
     <section class="sheet" id="sheet"></section>
   </main>
+  <script>
+    // Прямая ссылка: якорь #<lifeIndex>-<sceneIndex> вроде #0-0.
+    const initial = /^#(\d+)-(\d+)$/.exec(location.hash);
+    if (initial) {
+      window.__labInitial = { life: Number(initial[1]), scene: Number(initial[2]) };
+    }
+  </script>
   <script src="content.js?v=3"></script>
-  <script src="pixel-memories.js?v=3"></script>
+  <script src="pixel-memories.js?v=4"></script>
   <script>
     const lifeSelect = document.querySelector('#life');
     const sceneSelect = document.querySelector('#scene');
@@ -54,34 +67,60 @@
     names.forEach((name, i) => sceneSelect.add(new Option(`${String(i + 1).padStart(2, '0')} · ${name}`, i)));
     function makeFrame(life, sceneIndex, scale) {
       const wrap = document.createElement('div'); wrap.className = 'frame';
+      const stack = document.createElement('div'); stack.className = 'stack';
       const bg = document.createElement('canvas'), actor = document.createElement('canvas');
       bg.className = 'pixel-background'; actor.className = 'pixel-actor';
-      bg.width = actor.width = 320; bg.height = actor.height = 180;
-      wrap.append(bg, actor);
+      bg.width = actor.width = 480; bg.height = actor.height = 270;
+      stack.append(bg, actor);
+      wrap.append(stack);
       drawPixelMemory(wrap, sceneIndex, life);
-      wrap.querySelectorAll('canvas').forEach(c => { c.style.width = `${320 * scale}px`; });
-      return wrap;
+      stack.querySelectorAll('canvas').forEach(c => { c.style.width = `${480 * scale}px`; c.style.height = `${270 * scale}px`; });
+      return { wrap, stack };
     }
     function renderSingle() {
       const life = lives[Number(lifeSelect.value)], index = Number(sceneSelect.value), scale = Number(scaleSelect.value);
       single.replaceChildren();
-      const frame = makeFrame(life, index, scale);
+      const { wrap, stack } = makeFrame(life, index, scale);
+      const maxW = Math.min(window.innerWidth - 80, 480 * scale);
+      const w = Math.max(320, maxW);
+      stack.style.width = `${w}px`;
+      stack.style.height = `${Math.round(w * 270 / 480)}px`;
+      stack.querySelectorAll('canvas').forEach(c => { c.style.width = '100%'; c.style.height = '100%'; });
       const label = document.createElement('div'); label.innerHTML = `<b>${life.name}</b> · ${names[index]} · ${life.symbol || 'без символа'}`;
-      frame.append(label); single.append(frame);
+      wrap.append(label); single.append(wrap);
       status.textContent = `${lives.length} жизней · ${names.length} этапов`;
     }
     function renderSheet() {
       sheet.replaceChildren();
       lives.forEach((life, lifeIndex) => names.forEach((name, sceneIndex) => {
         const card = document.createElement('article'); card.className = 'thumb';
-        const frame = makeFrame(life, sceneIndex, 1);
-        card.append(frame.querySelector('canvas'), frame.querySelector('canvas'));
+        card.dataset.key = `${lifeIndex}-${sceneIndex}`;
+        const { stack } = makeFrame(life, sceneIndex, 1);
+        stack.style.width = '100%';
+        stack.style.aspectRatio = '16 / 9';
+        stack.style.height = 'auto';
+        stack.querySelectorAll('canvas').forEach(c => { c.style.width = '100%'; c.style.height = '100%'; });
+        card.append(stack);
         const caption = document.createElement('div'); caption.innerHTML = `<b>${String(lifeIndex + 1).padStart(2, '0')} · ${life.name}</b><span>${name}</span>`;
         card.append(caption); sheet.append(card);
       }));
     }
     [lifeSelect, sceneSelect, scaleSelect].forEach(el => el.addEventListener('change', renderSingle));
     document.querySelector('#all').addEventListener('click', renderSheet);
+    // Каждый эскиз открывает свою сцену крупно: #<life>-<scene>.
+    sheet.addEventListener('click', (e) => {
+      const card = e.target.closest('.thumb'); if (!card) return;
+      const [life, scene] = card.dataset.key.split('-');
+      lifeSelect.value = life; sceneSelect.value = scene;
+      location.hash = `${life}-${scene}`;
+      renderSingle();
+      single.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    if (window.__labInitial) {
+      lifeSelect.value = String(Math.min(window.__labInitial.life, lives.length - 1));
+      sceneSelect.value = String(Math.min(window.__labInitial.scene, names.length - 1));
+      scaleSelect.value = '4';
+    }
     renderSingle(); renderSheet();
   </script>
 </body>

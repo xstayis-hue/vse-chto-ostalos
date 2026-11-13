@@ -445,9 +445,9 @@ async function memoryScreen(idx) {
         <span class="eyebrow memory-name">${LIFE.name}</span>
       </div>
       <div class="scene memory-scene">
-        <div class="pixel-memory" aria-hidden="true"><canvas class="pixel-background" width="320" height="180"></canvas><canvas class="pixel-actor" width="320" height="180"></canvas></div>
+        <div class="pixel-memory" aria-hidden="true"><canvas class="pixel-background" width="480" height="270"></canvas><canvas class="pixel-actor" width="480" height="270"></canvas></div>
         ${m.fx === "room" ? '<div class="fx phone"></div>' : ""}
-        ${idx === 0 ? '<blockquote class="scene-scripture"><span>«Я свет миру; кто последует за Мною, тот не будет ходить во тьме.»</span><cite>Ин. 8:12</cite></blockquote>' : ''}
+        ${idx === 0 ? '<div class="scene-scripture scene-scripture-frame"><span>«Я свет миру; кто последует за Мною, тот не будет ходить во тьме.»</span><cite>Ин. 8:12</cite></div>' : ''}
         <div class="memory-content"><div class="caption">
           <div class="yeartag">${m.y}</div>
           <h2 class="serif" id="cap-h"></h2>
