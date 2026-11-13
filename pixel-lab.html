@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pixel Lab · Всё, что от меня осталось</title>
+  <style>
+    :root { color-scheme: dark; --bg:#070a0b; --panel:#101718; --line:#2a403d; --ink:#d4dfd9; --dim:#82948d; --cyan:#8fd1c2; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:12px "Courier New",monospace; }
+    header { position:sticky; top:0; z-index:2; display:flex; gap:16px; flex-wrap:wrap; align-items:center; padding:14px 18px; background:rgba(7,10,11,.94); border-bottom:1px solid var(--line); }
+    h1 { margin:0; font:20px Georgia,serif; font-style:italic; }
+    label { color:var(--dim); display:grid; gap:5px; }
+    select, button { min-height:34px; padding:7px 10px; border:1px solid var(--line); background:#0b1112; color:var(--ink); font:inherit; }
+    button:hover, select:focus { border-color:var(--cyan); }
+    .status { margin-left:auto; color:var(--cyan); }
+    main { padding:18px; }
+    .single { display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap; margin-bottom:30px; }
+    .frame { display:grid; gap:8px; color:var(--dim); }
+    .frame canvas { display:block; width:480px; max-width:90vw; height:auto; image-rendering:pixelated; border:1px solid var(--line); background:#101719; }
+    .frame b { color:var(--ink); font-weight:400; }
+    .sheet { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px; }
+    .thumb { min-width:0; padding:8px; background:var(--panel); border:1px solid var(--line); }
+    .thumb canvas { display:block; width:100%; height:auto; image-rendering:pixelated; background:#101719; }
+    .thumb div { display:flex; justify-content:space-between; gap:8px; padding-top:7px; color:var(--dim); font-size:10px; }
+    .thumb b { color:var(--ink); font-weight:400; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Pixel Lab</h1>
+    <label>Жизнь<select id="life"></select></label>
+    <label>Этап<select id="scene"></select></label>
+    <label>Масштаб<select id="scale"><option value="2">2×</option><option value="3" selected>3×</option><option value="4">4×</option></select></label>
+    <button id="all">Обновить лист</button>
+    <span class="status" id="status"></span>
+  </header>
+  <main>
+    <section class="single" id="single"></section>
+    <section class="sheet" id="sheet"></section>
+  </main>
+  <script src="content.js?v=3"></script>
+  <script src="pixel-memories.js?v=3"></script>
+  <script>
+    const lifeSelect = document.querySelector('#life');
+    const sceneSelect = document.querySelector('#scene');
+    const scaleSelect = document.querySelector('#scale');
+    const single = document.querySelector('#single');
+    const sheet = document.querySelector('#sheet');
+    const status = document.querySelector('#status');
+    const lives = window.CURATED_LIVES || [];
+    const names = ['Рождение', 'Детство', 'Поворот', 'Голос', 'Прощание', 'После'];
+    lives.forEach((life, i) => lifeSelect.add(new Option(`${String(i + 1).padStart(2, '0')} · ${life.name}`, i)));
+    names.forEach((name, i) => sceneSelect.add(new Option(`${String(i + 1).padStart(2, '0')} · ${name}`, i)));
+    function makeFrame(life, sceneIndex, scale) {
+      const wrap = document.createElement('div'); wrap.className = 'frame';
+      const bg = document.createElement('canvas'), actor = document.createElement('canvas');
+      bg.className = 'pixel-background'; actor.className = 'pixel-actor';
+      bg.width = actor.width = 320; bg.height = actor.height = 180;
+      wrap.append(bg, actor);
+      drawPixelMemory(wrap, sceneIndex, life);
+      wrap.querySelectorAll('canvas').forEach(c => { c.style.width = `${320 * scale}px`; });
+      return wrap;
+    }
+    function renderSingle() {
+      const life = lives[Number(lifeSelect.value)], index = Number(sceneSelect.value), scale = Number(scaleSelect.value);
+      single.replaceChildren();
+      const frame = makeFrame(life, index, scale);
+      const label = document.createElement('div'); label.innerHTML = `<b>${life.name}</b> · ${names[index]} · ${life.symbol || 'без символа'}`;
+      frame.append(label); single.append(frame);
+      status.textContent = `${lives.length} жизней · ${names.length} этапов`;
+    }
+    function renderSheet() {
+      sheet.replaceChildren();
+      lives.forEach((life, lifeIndex) => names.forEach((name, sceneIndex) => {
+        const card = document.createElement('article'); card.className = 'thumb';
+        const frame = makeFrame(life, sceneIndex, 1);
+        card.append(frame.querySelector('canvas'), frame.querySelector('canvas'));
+        const caption = document.createElement('div'); caption.innerHTML = `<b>${String(lifeIndex + 1).padStart(2, '0')} · ${life.name}</b><span>${name}</span>`;
+        card.append(caption); sheet.append(card);
+      }));
+    }
+    [lifeSelect, sceneSelect, scaleSelect].forEach(el => el.addEventListener('change', renderSingle));
+    document.querySelector('#all').addEventListener('click', renderSheet);
+    renderSingle(); renderSheet();
+  </script>
+</body>
+</html>
