@@ -1,3 +1,5 @@
+
+
 :root {
   color-scheme: dark;
   --ink: #cfd9d6;
@@ -26,6 +28,38 @@
   line-height: 1.4;
   text-align: right;
 }
+
+.scene-scripture {
+  position: absolute;
+  z-index: 3;
+  top: 24px;
+  right: 24px;
+  width: min(260px, calc(100% - 48px));
+  margin: 0;
+  color: #e1e8e2;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: right;
+  text-shadow: 0 1px 6px #030507;
+}
+.scene-scripture:not(.scene-scripture-dark):not(.scene-scripture-frame) {
+  width: min(320px, calc(100% - 32px));
+  right: 16px;
+  padding: 12px 16px;
+  background: linear-gradient(270deg, rgba(3, 8, 9, .82), rgba(3, 8, 9, .55) 75%, transparent);
+  box-shadow: none;
+}
+.scene-scripture cite {
+  display: block;
+  margin-top: 4px;
+  font-family: "Courier New", monospace;
+  font-size: 10px;
+  font-style: normal;
+}
+
+/* Мелкая подпись в углу кадра. Идёт после базовых .scene-scripture правил,
+   чтобы при равной специфичности побеждать по порядку. */
 .scene-scripture-frame {
   position: absolute;
   right: 12px;
@@ -44,35 +78,6 @@
 .scene-scripture-frame cite { margin-top: 2px; font-size: 8px; letter-spacing: .08em; }
 .scene-scripture-frame span { display: block; }
 
-.scene-scripture {
-  position: absolute;
-  z-index: 3;
-  top: 24px;
-  right: 24px;
-  width: min(260px, calc(100% - 48px));
-  margin: 0;
-  color: #e1e8e2;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 14px;
-  line-height: 1.5;
-  text-align: right;
-  text-shadow: 0 1px 6px #030507;
-}
-.scene-scripture:not(.scene-scripture-dark) {
-  width: min(320px, calc(100% - 32px));
-  right: 16px;
-  padding: 12px 16px;
-  background: linear-gradient(270deg, rgba(3, 8, 9, .82), rgba(3, 8, 9, .55) 75%, transparent);
-  box-shadow: none;
-}
-.scene-scripture cite {
-  display: block;
-  margin-top: 4px;
-  font-family: "Courier New", monospace;
-  font-size: 10px;
-  font-style: normal;
-}
-.scene-scripture-dark { color: #25322d; text-shadow: none; }
 .pixel-memory { position: absolute; inset: 0; overflow: hidden; background: #172321; }
 .pixel-memory canvas { position: absolute; left: 50%; top: 50%; width: min(100%, 640px); height: auto; aspect-ratio: 4 / 3; transform: translate(-50%, -50%); image-rendering: pixelated; }
 .title-screen .scripture-mark small {
