@@ -412,7 +412,6 @@ async function chooseScreen() {
     <div class="screen archive-screen">
       <div class="archive-list">
          <div class="archive-header"><span>АРХИВ · 01</span><span>${observerLabel()}</span></div>
-         <div class="meta-progress">ПРОЖИТО ЖИЗНЕЙ: ${meta.lives} · ЭКСПЕДИЦИЙ: ${meta.expeditions.length}/${EXPEDITION_IDS.length} · ПАМЯТЬ: ${archivePercent(meta)}%</div>
         <div class="archive-title serif">Кем ты был<br><i>до тишины?</i></div>
         <div class="archive-hint">пять записей. одна из них — ты.</div>
         <ol class="archive-items">
@@ -431,8 +430,7 @@ async function chooseScreen() {
         </div>
       </div>
     </div>`);
-  AudioLayer.memoryCue(idx);
-}
+  }
 
 async function memoryScreen(idx) {
   const m = LIFE.memories[idx];
@@ -469,6 +467,7 @@ async function memoryScreen(idx) {
     </div>`);
   const heading = $("#cap-h"), description = $("#cap-p");
   drawPixelMemory(stage, idx, LIFE);
+  AudioLayer.memoryCue(idx);
   await typeText(heading, m.h, 20);
   if (heading?.isConnected) await typeText(description, m.p, 10);
 }
@@ -1534,15 +1533,25 @@ void main(){
           <h1 class="serif">Всё, что от меня<span class="ost">ОСТАЛОСЬ</span></h1>
           <div class="system">${endingTitle}</div>
           <p class="faint" style="max-width:420px;margin:14px auto 0">${endingText}</p>
-          <div class="result-card"><span>ОТПЕЧАТОК ПРОХОЖДЕНИЯ</span><b>${LIFE.name}</b><small>${LIFE.symbol || "след не определён"} · ${choiceText} · ${retained} фрагм.</small><small>ОБЩИЙ АРХИВ: ${archivePercent(meta)}% · ЖИЗНЕЙ: ${meta.lives} · ЭКСПЕДИЦИЙ: ${meta.expeditions.length}/${EXPEDITION_IDS.length}</small></div>
-          <div class="row center">
-            <button class="button primary" data-go="restart">Начать снова</button>
-            <button class="button ghost" data-go="title">Закрыть архив</button>
-            <button class="button ghost" data-share>Поделиться результатом</button>
-            <button class="button ghost" data-card>Сохранить карточку</button>
+          <div class="ending-silence" id="endingSilence">не закрывай. просто побудь здесь</div>
+          <div class="ending-actions" id="endingActions" hidden>
+            <div class="result-card"><span>запись · ${LIFE.name}</span><small>${LIFE.symbol || "след не определён"} · ${choiceText}</small></div>
+            <div class="row center">
+              <button class="button ghost" data-go="title">Выйти</button>
+              <button class="button ghost" data-share>Поделиться</button>
+              <button class="button ghost" data-card>Сохранить</button>
+            </div>
+            <button class="button ghost ending-again" data-go="restart">прожить другую жизнь</button>
           </div>
         </div>
       </div>`);
+    // Тишина перед действиями: сначала просто экран, кнопки — через 45 секунд.
+    setTimeout(() => {
+      const box = $("#endingActions"); const hint = $("#endingSilence");
+      if (!box || !box.isConnected) return;
+      box.hidden = false;
+      if (hint) hint.textContent = "архив открыт";
+    }, 45000);
   }
 
   // скрыть подсказку через 6с

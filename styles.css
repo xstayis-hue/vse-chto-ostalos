@@ -194,6 +194,20 @@ button:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
 .ending-wrap h1 { font-size: clamp(30px, 8.6vw, 62px); line-height: 1.05; margin: 22px 0 10px; color: #e8efe9; }
 .ending-wrap h1 .ost { display: block; color: var(--cyan); font-family: "Arial Narrow", Impact, sans-serif; transform: skewX(-6deg); letter-spacing: .05em; }
 .ending-wrap .system { margin: 18px 0; }
+.ending-silence {
+  margin: 40px 0 0;
+  color: #6d7f79;
+  font: 10px "Courier New", monospace;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  opacity: .55;
+  transition: opacity 2s ease;
+}
+.ending-actions { display: grid; gap: 14px; justify-items: center; margin-top: 34px; animation: endingFade 2.4s ease both; }
+.ending-actions .result-card { margin: 0; opacity: .8; }
+.ending-again { margin-top: 6px; font-size: 9px; letter-spacing: .16em; opacity: .45; }
+.ending-again:hover { opacity: .85; }
+@keyframes endingFade { from { opacity: 0; } to { opacity: 1; } }
 
 @keyframes grain { 0% { transform: translate(0, 0); } 25% { transform: translate(-2%, 1%); } 50% { transform: translate(1%, -2%); } 75% { transform: translate(-1%, 2%); } 100% { transform: translate(0, 0); } }
 @keyframes blink { 50% { opacity: 0; } }
