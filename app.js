@@ -436,57 +436,88 @@ async function memoryScreen(idx) {
   const m = LIFE.memories[idx];
   const total = LIFE.memories.length;
   const choices = m.choices || [];
+  const ageNow = typeof m.y === "number" ? m.y - LIFE.year : null;
+  const ageWord = ageNow == null ? "" : ageNow === 0 ? "тебе нет и дня" : `тебе ${ageNow} ${plural(ageNow, "год", "года", "лет")}`;
+  const nextGo = idx + 1 < total ? "next" : "death";
   render(`
-    <div class="memory-stage">
-      <div style="padding: calc(16px + env(safe-area-inset-top)) 20px 0; display:flex; justify-content:space-between; gap:12px">
-        <span class="eyebrow">ВОСПОМИНАНИЕ ${String(idx + 1).padStart(2, '0')} / ${String(total).padStart(2, '0')}</span>
-        <span class="eyebrow memory-name">${LIFE.name}</span>
-      </div>
-      <div class="scene memory-scene">
+    <div class="witness memory-decay" style="--decay:${(idx / Math.max(1, total - 1)).toFixed(2)}">
+      <div class="witness-frame">
         <div class="pixel-memory" aria-hidden="true"><canvas class="pixel-background" width="480" height="270"></canvas><canvas class="pixel-actor" width="480" height="270"></canvas></div>
-        ${m.fx === "room" ? '<div class="fx phone"></div>' : ""}
-        ${idx === 0 ? '<div class="scene-scripture scene-scripture-frame"><span>«Я свет миру; кто последует за Мною, тот не будет ходить во тьме.»</span><cite>Ин. 8:12</cite></div>' : ''}
-        <div class="memory-content"><div class="caption">
-          <div class="yeartag">${m.y}</div>
-          <h2 class="serif" id="cap-h"></h2>
-          <p id="cap-p"></p>
-        </div>
-        ${choices.length ? `<div class="memory-choices" role="group" aria-label="Выбор воспоминания">
-          <span class="eyebrow">ЧТО ОСТАНЕТСЯ В ПАМЯТИ?</span>
-          <div class="row">${choices.map(c => {
-            const selected = RUN.choices[idx] === c.id;
-            return `<button class="button ghost ${selected ? "selected" : ""}" data-choice="${c.id}" data-effect="${c.effect}"${selected ? " disabled" : ""}>${c.label}</button>`;
-          }).join("")}</div>
-        </div>` : ""}</div>
       </div>
-      <div class="bar"><i style="width:${((idx + 1) / total) * 100}%"></i></div>
-      <div class="scene-foot">
-        <span class="faint" style="font-size:10px">${idx + 1 < total ? "память сохраняется неполностью · осталось " + (total - idx - 1) : "последний фрагмент · дальше только тишина"}</span>
-        <button class="button primary" data-go="${idx + 1 < total ? "next" : "death"}"${choices.length && RUN.choices[idx] == null ? " disabled" : ""}>${idx + 1 < total ? "Дальше" : "Продолжить"}</button>
+      <div class="witness-meta"><span>${m.y}</span><span>${ageWord}</span></div>
+      ${idx === 0 ? '<blockquote class="witness-scripture"><span>«Я свет миру; кто последует за Мною, тот не будет ходить во тьме.»</span><cite>Ин. 8:12</cite></blockquote>' : ''}
+      <div class="witness-text">
+        <h2 class="serif" id="cap-h"></h2>
+        <p id="cap-p"></p>
+        <p class="witness-whisper" id="cap-w"></p>
+      </div>
+      ${choices.length ? `<div class="witness-choices" role="group" aria-label="Что останется в памяти">
+        ${choices.map(c => {
+          const selected = RUN.choices[idx] === c.id;
+          return `<button class="witness-choice ${selected ? "selected" : ""}" data-choice="${c.id}" data-effect="${c.effect}"${selected ? " disabled" : ""}>${c.label}</button>`;
+        }).join('<span class="witness-or">или</span>')}
+      </div>` : ""}
+      <div class="scene-foot witness-foot">
+        <button class="witness-next" data-go="${nextGo}" disabled>${idx + 1 < total ? "отпустить" : "отпустить всё"}</button>
       </div>
     </div>`);
   const heading = $("#cap-h"), description = $("#cap-p");
   drawPixelMemory(stage, idx, LIFE);
+  composedMemoryUrl(LIFE, idx).then((src) => {
+    const frame = stage.querySelector('.pixel-memory');
+    if (!src || !frame?.isConnected) return;
+    const el = document.createElement('img');
+    el.className = 'memory-photo';
+    el.src = src; el.alt = '';
+    frame.insertBefore(el, frame.querySelector('.pixel-fx'));
+    frame.classList.add('has-photo');
+  });
   AudioLayer.memoryCue(idx);
-  await typeText(heading, m.h, 20);
-  if (heading?.isConnected) await typeText(description, m.p, 10);
+  await pause(1400);
+  if (!heading?.isConnected) return;
+  await typeText(heading, m.h, 45);
+  await pause(900);
+  if (heading?.isConnected) await typeText(description, m.p, 28);
+  // Hold: the moment must be stayed in before it can be let go.
+  await pause(choices.length ? 1500 : 4500);
+  if (!heading?.isConnected) return;
+  $(".witness")?.classList.add("can-choose");
+  const next = $(".witness-next");
+  if (next && !(choices.length && RUN.choices[idx] == null)) next.disabled = false;
+  const whispers = ["ты помнишь это иначе.", "здесь было теплее.", "кто-то ещё был в комнате.", `ты не сказал${LIFE.gender === 'f' ? 'а' : ''} этого вслух.`, `это было в последний раз. ты не знал${LIFE.gender === 'f' ? 'а' : ''}.`, "отсюда уже никто не смотрит."];
+  await pause(7000);
+  const w = $("#cap-w");
+  if (w?.isConnected && !w.textContent) { w.textContent = whispers[idx % whispers.length]; AudioLayer.whisper?.(); }
+}
+
+function plural(n, one, few, many) {
+  const a = n % 10, b = n % 100;
+  if (a === 1 && b !== 11) return one;
+  if (a >= 2 && a <= 4 && (b < 12 || b > 14)) return few;
+  return many;
 }
 
 function transitionToSpace() {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) { spaceScreen(); return; }
-  const variant = LIFE.id % 5;
-  render(`<div class="departure departure-${variant}" role="status" aria-label="Переход в космос"><video class="departure-video" autoplay muted playsinline preload="auto" src="assets/departure-orbit.mp4"></video><div class="departure-orbit"></div><div class="departure-light"></div><span>ТЕЛО БОЛЬШЕ НЕ ОТВЕЧАЕТ</span></div>`);
-  AudioLayer.ping(180 + variant * 30, 1.2, 0.04);
-  const video = $('.departure-video');
-  video.addEventListener('playing', () => video.parentElement?.classList.add('video-playing'), { once: true });
-  let completed = false;
-  const finish = () => { if (!completed && $('.departure')) { completed = true; spaceScreen(); } };
-  video.addEventListener('ended', finish, { once: true });
-  video.addEventListener('error', finish, { once: true });
-  video.play().catch(() => { Haptics.notification("warning"); finish(); });
-  const fallbackTimer = setTimeout(() => { if (!video.currentTime || video.readyState < 2) finish(); }, 2500);
-  const hardTimer = setTimeout(finish, 9000);
-  video.addEventListener("ended", () => { clearTimeout(fallbackTimer); clearTimeout(hardTimer); }, { once: true });
+  // The ascent lives in its own layer above the stage, so the space scene can
+  // be mounted underneath while the Earth is still receding: one continuous shot.
+  document.querySelector('.ascent')?.remove();
+  const host = document.createElement('div');
+  host.className = 'departure ascent ascent-overlay';
+  host.setAttribute('role', 'status');
+  host.setAttribute('aria-label', 'Переход в космос');
+  host.innerHTML = '<button class="ascent-skip" aria-label="Пропустить">·</button>';
+  document.getElementById('app').appendChild(host);
+  AudioLayer.ping(110, 6, 0.03);
+  setTimeout(() => AudioLayer.ping(165, 8, 0.025), 7000);
+  setTimeout(() => AudioLayer.ping(220, 10, 0.02), 14500);
+  let mounted = false;
+  const mountSpace = () => { if (!mounted) { mounted = true; spaceScreen(); } };
+  const stop = playAscent(host, LIFE, () => { mountSpace(); host.remove(); }, mountSpace);
+  let hold = 0;
+  const skip = host.querySelector('.ascent-skip');
+  skip.addEventListener('pointerdown', () => { hold = setTimeout(() => stop(), 1200); });
+  ['pointerup', 'pointerleave'].forEach((ev) => skip.addEventListener(ev, () => clearTimeout(hold)));
 }
 
 async function deathScreen() {
@@ -1590,7 +1621,7 @@ document.addEventListener("click", (e) => {
       b.classList.toggle("selected", b === decision);
     });
     const advance = stage.querySelector(".scene-foot [data-go]");
-    if (advance) advance.disabled = false;
+    if (advance) { advance.disabled = false; advance.scrollIntoView({ behavior: "smooth", block: "end" }); }
     return;
   }
   if (e.target.closest("[data-share]")) {

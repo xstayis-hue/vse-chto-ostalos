@@ -119,7 +119,120 @@ function pmOutlined(ctx, drawFill, drawShadow, ctxShadow) {
   drawFill(ctx);
 }
 
+/* Memory recall: the frame is drawn once offscreen, then "remembered" —
+   pixels surface in Bayer order, the room breathes (dust, flicker),
+   and rarely something is in the frame that should not be. */
 function drawPixelMemory(scene, index, person) {
+  const bg = scene.querySelector('.pixel-background');
+  const fg = scene.querySelector('.pixel-actor');
+  if (!bg || !fg) return;
+  const host = bg.parentElement;
+  if (host._pmStop) host._pmStop();
+
+  const W = 480, H = 270;
+  const offB = document.createElement('canvas'); offB.width = W; offB.height = H;
+  const offA = document.createElement('canvas'); offA.width = W; offA.height = H;
+  const proxy = { querySelector: (s) => (s === '.pixel-background' ? offB : s === '.pixel-actor' ? offA : null) };
+  pmPaint(proxy, index, person);
+
+  let fx = host.querySelector('.pixel-fx');
+  if (!fx) {
+    fx = document.createElement('canvas');
+    fx.className = 'pixel-fx'; fx.width = W; fx.height = H;
+    host.appendChild(fx);
+  }
+  const b = bg.getContext('2d'), a = fg.getContext('2d'), f = fx.getContext('2d');
+  [b, a, f].forEach((c) => { c.imageSmoothingEnabled = false; });
+
+  const id = Math.abs(person?.id || 0);
+  let rs = (id * 2654435761 + index * 97) >>> 0;
+  const rnd = () => ((rs = (rs * 1664525 + 1013904223) >>> 0) / 4294967296);
+
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const REVEAL = reduced ? 0 : 2200;
+  const BLOCK = 6;
+  const t0 = performance.now();
+  let revealedLevel = -1;
+  let raf = 0, alive = true;
+
+  const motes = Array.from({ length: 26 }, () => ({ x: rnd() * W, y: rnd() * H, v: 0.03 + rnd() * 0.08, p: rnd() * 6.28 }));
+  // An uncanny visitor: where and when it appears is fixed per life + scene.
+  const presence = index === 5 || rnd() < 0.7 ? {
+    x: index === 2 ? 352 : 300 + rnd() * 140,
+    y: index === 2 ? 60 : 96 + rnd() * 50,
+    at: 7000 + rnd() * 9000,
+    len: 260 + rnd() * 380,
+  } : null;
+
+  function revealTo(level) {
+    // Copy only blocks whose Bayer threshold is under the current level.
+    for (let lv = revealedLevel + 1; lv <= level; lv++) {
+      for (let by = 0; by < H / BLOCK; by++) {
+        for (let bx = 0; bx < W / BLOCK; bx++) {
+          if (PM_BAYER[by % 4][bx % 4] !== lv) continue;
+          const x = bx * BLOCK, y = by * BLOCK;
+          b.drawImage(offB, x, y, BLOCK, BLOCK, x, y, BLOCK, BLOCK);
+          a.drawImage(offA, x, y, BLOCK, BLOCK, x, y, BLOCK, BLOCK);
+        }
+      }
+    }
+    revealedLevel = level;
+  }
+
+  b.clearRect(0, 0, W, H); a.clearRect(0, 0, W, H);
+  if (!REVEAL) revealTo(15);
+
+  function frame(now) {
+    if (!alive || !host.isConnected) { alive = false; return; }
+    const t = Math.max(0, now - t0);
+    if (revealedLevel < 15) {
+      const k = Math.min(1, t / REVEAL);
+      revealTo(Math.floor(Math.pow(k, 0.8) * 15.99));
+    }
+    f.clearRect(0, 0, W, H);
+
+    // breathing light: slow uneven flicker over the whole memory
+    const flick = 0.06 + Math.sin(t * 0.0011) * 0.03 + (Math.sin(t * 0.017) > 0.985 ? 0.12 : 0);
+    f.fillStyle = `rgba(2,5,6,${flick.toFixed(3)})`;
+    f.fillRect(0, 0, W, H);
+
+    // dust in the window light
+    f.fillStyle = 'rgba(244,232,200,.55)';
+    for (const m of motes) {
+      m.y -= m.v; m.x += Math.sin(t * 0.0006 + m.p) * 0.12;
+      if (m.y < -2) { m.y = H + 2; m.x = rnd() * W; }
+      if ((m.p + t * 0.001) % 6.28 < 4.6) f.fillRect(m.x | 0, m.y | 0, 1, 1);
+    }
+
+    // memory decay: a rolling band and torn rows while still being recalled
+    const roll = ((t * 0.018) % (H + 40)) - 20;
+    f.fillStyle = 'rgba(200,220,210,.035)';
+    f.fillRect(0, roll | 0, W, 10);
+    if (t > REVEAL && rnd() < 0.012) {
+      const y = (rnd() * H) | 0, h = 2 + ((rnd() * 6) | 0), dx = ((rnd() - 0.5) * 18) | 0;
+      f.drawImage(bg, 0, y, W, h, dx, y, W, h);
+      f.drawImage(fg, 0, y, W, h, dx, y, W, h);
+    }
+
+    // presence: a dark shape that is there for half a second, then never was
+    if (presence) {
+      const pt = (t - presence.at) % 24000;
+      if (pt > 0 && pt < presence.len) {
+        const x = presence.x | 0, y = presence.y | 0;
+        f.fillStyle = 'rgba(3,5,6,.86)';
+        f.fillRect(x - 5, y, 10, 9); f.fillRect(x - 8, y + 9, 16, 26); f.fillRect(x - 6, y + 35, 12, 14);
+        f.fillStyle = 'rgba(232,226,206,.85)';
+        f.fillRect(x - 3, y + 3, 1, 1); f.fillRect(x + 2, y + 3, 1, 1);
+      }
+    }
+
+    raf = requestAnimationFrame(frame);
+  }
+  raf = requestAnimationFrame(frame);
+  host._pmStop = () => { alive = false; cancelAnimationFrame(raf); };
+}
+
+function pmPaint(scene, index, person) {
   const background = scene.querySelector('.pixel-background');
   const foreground = scene.querySelector('.pixel-actor');
   if (!background || !foreground) return;
