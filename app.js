@@ -443,7 +443,7 @@ async function memoryScreen(idx) {
   runPhase = 'memory';
   const m = LIFE.memories[idx];
   const total = LIFE.memories.length;
-  const choices = []; // Memories are witnessed, not a branching decision game.
+  const choices = m.choices || [];
   const ageNow = typeof m.y === "number" ? m.y - LIFE.year : null;
   const ageWord = ageNow == null ? "" : ageNow === 0 ? "тебе нет и дня" : `тебе ${ageNow} ${plural(ageNow, "год", "года", "лет")}`;
   const nextGo = idx + 1 < total ? "next" : "death";

@@ -1,5 +1,5 @@
-const CACHE = 'ostalos-experience-v2';
-const CORE = ['./', './index.html', './app.js?v=13', './content.js?v=7', './styles.css?v=13', './experience.css?v=2', './memory-world.js?v=2', './memory-images.js?v=3', './memory-composer.js?v=2', './flight.js?v=2', './ascent.js?v=5', './assets/three.min.js'];
+const CACHE = 'ostalos-experience-v3';
+const CORE = ['./', './index.html', './app.js?v=14', './content.js?v=7', './styles.css?v=13', './experience.css?v=2', './memory-world.js?v=2', './memory-images.js?v=3', './memory-composer.js?v=2', './flight.js?v=2', './ascent.js?v=5', './assets/three.min.js'];
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(CORE))));
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('ostalos-') && k !== CACHE).map(k => caches.delete(k))))));
 self.addEventListener('fetch', event => {
