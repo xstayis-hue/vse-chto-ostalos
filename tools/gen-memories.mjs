@@ -3,7 +3,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const KEY = fs.readFileSync('C:/Users/xstay/Desktop/VibeCode.txt', 'utf8').split(/\r?\n/)[0].trim();
+if (!process.env.PLUSVIBE_KEY_FILE) throw new Error('Set PLUSVIBE_KEY_FILE');
+const KEY = fs.readFileSync(process.env.PLUSVIBE_KEY_FILE, 'utf8').split(/\r?\n/)[0].trim();
 const OUT = path.resolve('assets/memories');
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -52,6 +53,7 @@ for (const j of jobs) {
       const json = await r.json();
       if (!r.ok) throw new Error(JSON.stringify(json).slice(0, 200));
       const img = await fetch(json.data[0].url);
+      if (!img.ok || !img.headers.get('content-type')?.startsWith('image/')) throw new Error('Invalid image response');
       fs.writeFileSync(dst, Buffer.from(await img.arrayBuffer()));
       n++;
       console.log('ok', j.file);

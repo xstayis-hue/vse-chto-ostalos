@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Мастерская воспоминаний</title>
+<style>
+  * { box-sizing: border-box; } body { margin: 0; background: #181818; color: #ddd; font: 16px/24px system-ui; }
+  header { padding: 24px; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+  h1 { font-size: 24px; line-height: 32px; font-weight: 500; margin: 0; }
+  button, select { color: #ddd; background: #272727; border: 1px solid #555; padding: 8px 12px; font: inherit; border-radius: 4px; }
+  button:focus-visible, select:focus-visible { outline: 2px solid #bbb; outline-offset: 4px; }
+  #note { margin: 0 24px 24px; color: #aaa; max-width: 800px; }
+  main { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,380px),1fr)); gap: 24px; padding: 0 24px 24px; }
+  figure { margin: 0; background: #000; } img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; display: block; }
+  figcaption { padding: 16px; } small { color: #aaa; } .pending { aspect-ratio: 16 / 10; background: #272727; display: grid; place-items: center; }
+</style>
+<header><h1>Мастерская воспоминаний</h1><select id="life" aria-label="Жизнь"></select><button id="random">Случайная жизнь</button><button id="compare">Сравнить три жизни</button></header>
+<p id="note">Кадры собираются на этом устройстве. Исходные материалы локальные; API и оплаты за генерацию нет. Один seed сохраняет человека и детали его жизни.</p>
+<main id="frames" aria-live="polite"></main>
+<script src="assets/three.min.js"></script><script src="content.js"></script><script src="memory-world.js"></script>
+<script>
+const select = document.querySelector('#life'), frames = document.querySelector('#frames');
+let generation = 0;
+CURATED_LIVES.forEach((p,i) => { const option = document.createElement('option'); option.value=i; option.textContent=`${p.name} · ${p.year}`; select.append(option); });
+async function show(compare = false) {
+  const token = ++generation; frames.replaceChildren();
+  const start=Number(select.value), people=compare ? [0,173,349].map(n=>CURATED_LIVES[(start+n)%500]) : [CURATED_LIVES[start]];
+  for (const person of people) for (const index of (compare ? [1,4] : [0,1,2,3,4,5])) {
+    const figure=document.createElement('figure'), placeholder=document.createElement('div'), caption=document.createElement('figcaption');
+    placeholder.className='pending'; placeholder.textContent='Проявляется воспоминание…';
+    const scene=person.memories[index]; caption.textContent=`${person.name} · ${scene.y} · ${scene.h}`;
+    figure.append(placeholder,caption); frames.append(figure);
+    const url=await MemoryWorld.image(person,index); if(token!==generation)return;
+    if(url) { const img=new Image(); img.src=url; img.alt=scene.h; placeholder.replaceWith(img); }
+    else placeholder.textContent='WebGL недоступен на этом устройстве';
+  }
+}
+select.onchange=()=>show(); document.querySelector('#random').onclick=()=>{select.value=Math.floor(Math.random()*500);show();};
+document.querySelector('#compare').onclick=()=>show(true); show();
+</script>
+</html>

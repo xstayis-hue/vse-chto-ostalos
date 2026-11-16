@@ -1,0 +1,58 @@
+[
+  {
+    "loc": "m-child",
+    "jobId": "cmwhh6nww0jmkzx01zly03ygo",
+    "maximumRub": 4,
+    "status": "success",
+    "priceRub": 1.86
+  },
+  {
+    "loc": "m-teen",
+    "jobId": "cmwhh70b40jnqzx01hztuihl0",
+    "maximumRub": 4,
+    "status": "success",
+    "priceRub": 1.86
+  },
+  {
+    "loc": "m-adult",
+    "jobId": "cmwhh7gdq0jpfzx01emksjmlp",
+    "maximumRub": 4,
+    "status": "success",
+    "priceRub": 1.86
+  },
+  {
+    "loc": "m-old",
+    "jobId": "cmwhh7sxm0jq8zx01cjjrebb1",
+    "maximumRub": 4,
+    "status": "success",
+    "priceRub": 1.86
+  },
+  {
+    "loc": "f-child",
+    "jobId": "cmwhh8hcs0jrhzx015xwclola",
+    "maximumRub": 4,
+    "status": "success",
+    "priceRub": 1.86
+  },
+  {
+    "loc": "f-teen",
+    "jobId": "cmwhh91yh0jtmzx01hbsa2729",
+    "maximumRub": 4,
+    "status": "success",
+    "priceRub": 1.86
+  },
+  {
+    "loc": "f-adult",
+    "jobId": "cmwhh9guv0003zx019gbu68u3",
+    "maximumRub": 4,
+    "status": "success",
+    "priceRub": 1.86
+  },
+  {
+    "loc": "f-old",
+    "jobId": "cmwhh9zbp0013zx0135qts0uv",
+    "maximumRub": 4,
+    "status": "success",
+    "priceRub": 1.86
+  }
+]

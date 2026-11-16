@@ -106,13 +106,15 @@ function mcProp(ctx, prop, x, y, rnd) {
 
 const composedCache = new Map();
 async function composedMemoryUrl(person, index) {
+  const generated = await window.MemoryWorld?.image(person, index);
+  if (generated) return generated;
   const key = `${person?.id}-${index}`;
   if (composedCache.has(key)) return composedCache.get(key);
   const img = await loadMemoryImage(memoryImageUrl(person, index));
   if (!img) return null;
-  const c = document.createElement('canvas');
-  composeMemory(img, person, index, c);
-  const url = c.toDataURL('image/png');
+  // Keep original detail; the presentation supplies the film grading.
+  const url = img.src;
   composedCache.set(key, url);
+  if (composedCache.size > 12) composedCache.delete(composedCache.keys().next().value);
   return url;
 }

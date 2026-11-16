@@ -1,0 +1,114 @@
+[
+  {
+    "loc": "roddom",
+    "jobId": "cmwhgy06t0ipezx01s1t656j0",
+    "maximumRub": 4,
+    "status": "success",
+    "priceRub": 1.86
+  },
+  {
+    "loc": "kitchen",
+    "jobId": "cmwhgyhjr0iszzx01zko9ivzj",
+    "maximumRub": 4,
+    "status": "success",
+    "priceRub": 1.86
+  },
+  {
+    "loc": "yard",
+    "jobId": "cmwhgyz5m0iv4zx01ryd7bs2y",
+    "maximumRub": 4,
+    "status": "success",
+    "priceRub": 1.86
+  },
+  {
+    "loc": "school",
+    "jobId": "cmwhgzfu20izqzx014gykt0ml",
+    "maximumRub": 4,
+    "status": "success",
+    "priceRub": 1.86
+  },
+  {
+    "loc": "bedroom",
+    "jobId": "cmwhgzvgo0j1izx016ukjwv87",
+    "maximumRub": 4,
+    "status": "success",
+    "priceRub": 1.86
+  },
+  {
+    "loc": "platform",
+    "jobId": "cmwhh0a720j35zx01sgg347cl",
+    "maximumRub": 4,
+    "status": "success",
+    "priceRub": 1.86
+  },
+  {
+    "loc": "factory",
+    "jobId": "cmwhh0qnk0j53zx01a361papu",
+    "maximumRub": 4,
+    "status": "success",
+    "priceRub": 1.86
+  },
+  {
+    "loc": "office",
+    "jobId": "cmwhh2i1n0j9zzx01498114sz",
+    "maximumRub": 4,
+    "status": "success",
+    "priceRub": 1.86
+  },
+  {
+    "loc": "hospital",
+    "jobId": "cmwhh34gk0jbwzx01cp28t320",
+    "maximumRub": 4,
+    "status": "success",
+    "priceRub": 1.86
+  },
+  {
+    "loc": "sea",
+    "jobId": "cmwhh3kbn0jdazx01bz3ion3a",
+    "maximumRub": 4,
+    "status": "success",
+    "priceRub": 1.86
+  },
+  {
+    "loc": "field",
+    "jobId": "cmwhh429v0jeqzx01e0bw73ii",
+    "maximumRub": 4,
+    "status": "success",
+    "priceRub": 1.86
+  },
+  {
+    "loc": "cemetery",
+    "jobId": "cmwhh4j7o0jgczx01719dxah6",
+    "maximumRub": 4,
+    "status": "success",
+    "priceRub": 1.86
+  },
+  {
+    "loc": "stairwell",
+    "jobId": "cmwhh4y400jhezx01lppj18vl",
+    "maximumRub": 4,
+    "status": "success",
+    "priceRub": 1.86
+  },
+  {
+    "loc": "balcony",
+    "jobId": "cmwhh5cyx0jijzx01eq0rqwn6",
+    "maximumRub": 4,
+    "status": "success",
+    "priceRub": 1.86
+  },
+  {
+    "loc": "bus",
+    "jobId": "cmwhh5uj30jkxzx01aq0hvvdn",
+    "maximumRub": 4,
+    "status": "success",
+    "priceRub": 1.86
+  },
+  {
+    "loc": "empty",
+    "jobId": "cmwhh6bvg0jltzx01hgk70ae4",
+    "maximumRub": 4,
+    "status": "success",
+    "priceRub": 1.86
+  }
+]

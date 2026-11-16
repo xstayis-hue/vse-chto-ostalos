@@ -4,11 +4,12 @@
 
 // ---------- Telegram Mini App ----------
 const TG = window.Telegram?.WebApp;
-if (TG) { TG.ready(); TG.expand(); TG.setHeaderColor?.('#030507'); TG.setBackgroundColor?.('#030507'); TG.disableVerticalSwipes?.(); }
+if (TG) { TG.ready(); TG.expand(); TG.setHeaderColor?.('#000000'); TG.setBackgroundColor?.('#000000'); TG.disableVerticalSwipes?.(); }
 const TG_USER = TG?.initDataUnsafe?.user || null;
 const OBSERVER_NAME = TG_USER?.first_name || TG_USER?.username || "Наблюдатель";
+const escapeHTML = (value) => String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function observerLabel() {
-  return TG_USER ? `Наблюдатель · ${OBSERVER_NAME}` : "Наблюдатель";
+  return TG_USER ? `Наблюдатель · ${escapeHTML(OBSERVER_NAME)}` : "Наблюдатель";
 }
 const Haptics = {
   impact(style = "light") { TG?.HapticFeedback?.impactOccurred?.(style); },
@@ -16,14 +17,9 @@ const Haptics = {
   notification(type = "success") { TG?.HapticFeedback?.notificationOccurred?.(type); },
 };
 function syncTelegramTheme() {
-  const p = TG?.themeParams;
-  if (!p) return;
-  const root = document.documentElement;
-  if (p.bg_color) root.style.setProperty("--bg", p.bg_color);
-  if (p.text_color) root.style.setProperty("--ink", p.text_color);
-  if (p.hint_color) root.style.setProperty("--muted", p.hint_color);
-  if (p.button_color) root.style.setProperty("--cyan", p.button_color);
-  if (p.destructive_text_color) root.style.setProperty("--danger", p.destructive_text_color);
+  // This is a dark cinematic experience, including inside a light Telegram theme.
+  TG?.setHeaderColor?.('#000000');
+  TG?.setBackgroundColor?.('#000000');
 }
 syncTelegramTheme();
 TG?.onEvent?.("themeChanged", syncTelegramTheme);
@@ -46,8 +42,10 @@ function flashOn() {
 
 // ---------- звук (WebAudio, тихий слой) ----------
 const AudioLayer = {
+  muted: false,
   ctx: null, master: null, drone: null, started: false,
   ensure() {
+    if (this.muted) return;
     if (this.started) {
       if (this.ctx?.state === "suspended" && navigator.userActivation?.isActive) this.ctx.resume().catch(() => {});
       return;
@@ -196,6 +194,8 @@ let offeredLives = [];
 const authoredLives = window.CURATED_LIVES || [];
 const lifePool = authoredLives.length ? authoredLives : generatedLifePool;
 const RUN = { choices: {}, signals: [], memories: new Set(), expeditions: [] };
+let runPhase = 'memory';
+let flightCheckpoint = null;
 const RUN_KEY = "vse-chto-ostalos:last-run";
 const META_KEY = "vse-chto-ostalos:archive";
 const EXPEDITION_IDS = ["moon-back", "dead-station", "echo-orbit"];
@@ -227,6 +227,8 @@ function persistRun(status = "active") {
   try {
     localStorage.setItem(RUN_KEY, JSON.stringify({
       status,
+      phase: runPhase,
+      flight: flightCheckpoint,
       lifeId: LIFE?.id,
       choices: RUN.choices,
       expeditions: RUN.expeditions,
@@ -249,11 +251,13 @@ function restoreRun() {
   const saved = readSavedRun();
   if (!saved) return false;
   LIFE = saved.life;
-  RUN.choices = saved.choices || {};
-  RUN.expeditions = saved.expeditions || [];
-  RUN.memories = new Set(saved.memories || []);
+  RUN.choices = saved.choices && typeof saved.choices === 'object' ? saved.choices : {};
+  RUN.expeditions = Array.isArray(saved.expeditions) ? saved.expeditions : [];
+  RUN.memories = new Set(Array.isArray(saved.memories) ? saved.memories : []);
+  runPhase = ['space', 'departure'].includes(saved.phase) ? saved.phase : 'memory';
+  flightCheckpoint = saved.flight || null;
   memIdx = clamp(Number(saved.scene) || 0, 0, LIFE.memories.length - 1);
-  memoryScreen(memIdx);
+  if (runPhase === 'space') spaceScreen(); else if (runPhase === 'departure') deathScreen(); else memoryScreen(memIdx);
   return true;
 }
 function clearSavedRun() {
@@ -278,7 +282,7 @@ function resultText() {
   const summary = runSummary();
   const branch = signalBranch();
   const verb = LIFE.gender === "f" ? "прожила" : "прожил";
-  return `Я ${verb} жизнь ${LIFE.name} в «Всё, что от меня ОСТАЛОСЬ». В памяти осталось: ${summary.retained} фрагментов. Экспедиций: ${summary.expeditions}. Архив восстановлен на ${summary.archivePercent}%. Ветка сигнала: ${branch}.`;
+  return `Я ${verb} жизнь ${LIFE.name} в «Всё, что от меня ОСТАЛОСЬ». В памяти осталось: ${summary.retained} фрагментов. Ветка сигнала: ${branch}.`;
 }
 const CHOICE_LABELS = {
   keep: "сохранить",
@@ -372,6 +376,8 @@ function pickLives() {
   RUN.choices = {};
   RUN.memories = new Set();
   RUN.expeditions = [];
+  runPhase = 'memory';
+  flightCheckpoint = null;
   memIdx = 0;
   clearSavedRun();
   persistRun();
@@ -382,23 +388,24 @@ let cleanupSpace = null;
 function render(html) {
   if (cleanupSpace) { cleanupSpace(); cleanupSpace = null; }
   stage.innerHTML = html;
+  document.querySelectorAll('[data-sound]').forEach(b => { b.textContent = AudioLayer.muted ? 'Звук выключен' : 'Звук включён'; b.setAttribute('aria-pressed', String(AudioLayer.muted)); });
 }
 
 async function titleScreen() {
-  AudioLayer.ensure(); AudioLayer.fade(0.0001, 0.1);
+  AudioLayer.fade(0.0001, 0.1);
   const saved = readSavedRun();
-  const resumeLabel = saved ? `Продолжить · воспоминание ${String((saved.scene || 0) + 1).padStart(2, "0")} / ${String(saved.life.memories.length).padStart(2, "0")}` : "";
+  const resumeLabel = saved ? (saved.phase === 'space' ? 'Вернуться в тишину' : 'Вспомнить дальше') : '';
   render(`
     <div class="screen title-screen">
-      <div class="title-topline"><span>ЦИКЛ / 748 395 322 441</span><span>ПОСЛЕ ЧЕЛОВЕКА</span></div>
+      <div class="title-topline"><span>Жизнь · память · тишина</span><button class="quiet-control" data-sound aria-pressed="false">Звук включён</button></div>
       <div class="scripture-mark"><span>«Что Я делаю, теперь ты не знаешь, а уразумеешь после.»</span><small>Ин. 13:7</small></div>
       <div class="title-wrap">
-        <div class="eyebrow">запись найдена · отправитель неизвестен</div>
+        <div class="eyebrow">ты уже был здесь</div>
         <h1 class="title serif"><span class="line">Всё, что от меня</span><span class="ost" data-t="ОСТАЛОСЬ">ОСТАЛОСЬ</span></h1>
-        <p class="title-description">Они думали, что после последнего вдоха<br>никто не услышит тишину.</p>
+        <p class="title-description">Целая жизнь. Несколько мгновений.<br>Ты помнишь всё, кроме того,<br>кто сейчас смотрит.</p>
         <div class="start-row">
-          <button class="button primary title-button" data-go="${saved ? "resume" : "choose"}">${saved ? resumeLabel : "Войти в архив"} <span>↗</span></button>
-          ${saved ? '<button class="button ghost" data-go="choose">Новая запись</button>' : ""}
+          <button class="button primary title-button" data-go="${saved ? "resume" : "begin"}">${saved ? resumeLabel : "Вспомнить"} <span>↗</span></button>
+          ${saved ? '<button class="button ghost" data-go="begin">Другая жизнь</button>' : ""}
         </div>
       </div>
       <div class="title-bottomline"><span>${observerLabel()}</span><span>НАУШНИКИ РЕКОМЕНДУЮТСЯ</span></div>
@@ -433,9 +440,10 @@ async function chooseScreen() {
   }
 
 async function memoryScreen(idx) {
+  runPhase = 'memory';
   const m = LIFE.memories[idx];
   const total = LIFE.memories.length;
-  const choices = m.choices || [];
+  const choices = []; // Memories are witnessed, not a branching decision game.
   const ageNow = typeof m.y === "number" ? m.y - LIFE.year : null;
   const ageWord = ageNow == null ? "" : ageNow === 0 ? "тебе нет и дня" : `тебе ${ageNow} ${plural(ageNow, "год", "года", "лет")}`;
   const nextGo = idx + 1 < total ? "next" : "death";
@@ -452,9 +460,9 @@ async function memoryScreen(idx) {
         <p class="witness-whisper" id="cap-w"></p>
       </div>
       ${choices.length ? `<div class="witness-choices" role="group" aria-label="Что останется в памяти">
-        ${choices.map(c => {
+          ${choices.map(c => {
           const selected = RUN.choices[idx] === c.id;
-          return `<button class="witness-choice ${selected ? "selected" : ""}" data-choice="${c.id}" data-effect="${c.effect}"${selected ? " disabled" : ""}>${c.label}</button>`;
+            return `<button class="witness-choice ${selected ? "selected" : ""}" data-choice="${c.id}" data-effect="${c.effect}" disabled>${c.label}</button>`;
         }).join('<span class="witness-or">или</span>')}
       </div>` : ""}
       <div class="scene-foot witness-foot">
@@ -462,9 +470,9 @@ async function memoryScreen(idx) {
       </div>
     </div>`);
   const heading = $("#cap-h"), description = $("#cap-p");
-  drawPixelMemory(stage, idx, LIFE);
+  const frame = stage.querySelector('.pixel-memory');
+  const whisper = $("#cap-w");
   composedMemoryUrl(LIFE, idx).then((src) => {
-    const frame = stage.querySelector('.pixel-memory');
     if (!src || !frame?.isConnected) return;
     const el = document.createElement('img');
     el.className = 'memory-photo';
@@ -473,20 +481,22 @@ async function memoryScreen(idx) {
     frame.classList.add('has-photo');
   });
   AudioLayer.memoryCue(idx);
-  await pause(1400);
+  await pause(700);
   if (!heading?.isConnected) return;
-  await typeText(heading, m.h, 45);
-  await pause(900);
-  if (heading?.isConnected) await typeText(description, m.p, 28);
+  await typeText(heading, m.h, 22);
+  await pause(400);
+  if (heading?.isConnected) await typeText(description, m.p, 16);
   // Hold: the moment must be stayed in before it can be let go.
-  await pause(choices.length ? 1500 : 4500);
+  await pause(1200);
   if (!heading?.isConnected) return;
   $(".witness")?.classList.add("can-choose");
+  if (RUN.choices[idx] == null) stage.querySelectorAll('[data-choice]').forEach((button) => { button.disabled = false; });
   const next = $(".witness-next");
   if (next && !(choices.length && RUN.choices[idx] == null)) next.disabled = false;
+  if (idx + 1 < total) window.MemoryWorld?.image(LIFE, idx + 1);
   const whispers = ["ты помнишь это иначе.", "здесь было теплее.", "кто-то ещё был в комнате.", `ты не сказал${LIFE.gender === 'f' ? 'а' : ''} этого вслух.`, `это было в последний раз. ты не знал${LIFE.gender === 'f' ? 'а' : ''}.`, "отсюда уже никто не смотрит."];
   await pause(7000);
-  const w = $("#cap-w");
+  const w = whisper;
   if (w?.isConnected && !w.textContent) { w.textContent = whispers[idx % whispers.length]; AudioLayer.whisper?.(); }
 }
 
@@ -498,6 +508,7 @@ function plural(n, one, few, many) {
 }
 
 function transitionToSpace() {
+  if (document.querySelector('.ascent')) return;
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) { spaceScreen(); return; }
   // The ascent lives in its own layer above the stage, so the space scene can
   // be mounted underneath while the Earth is still receding: one continuous shot.
@@ -512,19 +523,25 @@ function transitionToSpace() {
   setTimeout(() => AudioLayer.ping(165, 8, 0.025), 7000);
   setTimeout(() => AudioLayer.ping(220, 10, 0.02), 14500);
   let mounted = false;
-  const mountSpace = () => { if (!mounted) { mounted = true; spaceScreen(); } };
+  const mountSpace = (view) => {
+    if (mounted) return;
+    mounted = true;
+    if (view) flightCheckpoint = { ...view, pos: { x: Math.cos(.9) * 120 + view.pos.x, y: view.pos.y, z: Math.sin(.9) * 120 + view.pos.z } };
+    spaceScreen();
+  };
   const stop = playAscent(host, LIFE, () => { mountSpace(); host.remove(); }, mountSpace);
-  let hold = 0;
   const skip = host.querySelector('.ascent-skip');
-  skip.addEventListener('pointerdown', () => { hold = setTimeout(() => stop(), 1200); });
-  ['pointerup', 'pointerleave'].forEach((ev) => skip.addEventListener(ev, () => clearTimeout(hold)));
+  skip.textContent = 'Пропустить';
+  skip.addEventListener('click', stop);
 }
 
 async function deathScreen() {
+  runPhase = 'departure';
+  persistRun();
   render(`
     <div class="memory-stage">
       <div class="scene">
-        <div class="fx whiteout"></div>
+        <div class="fx last-light"></div>
         <blockquote class="scene-scripture scene-scripture-dark"><span>«Свет ещё на малое время есть с вами; ходите, пока есть свет, чтобы не объяла вас тьма.»</span><cite>Ин. 12:35</cite></blockquote>
         <div class="caption" style="color:#1a221f">
           <div class="yeartag" style="color:#3c4a45">СЕРДЦЕБИЕНИЕ: НЕ ОБНАРУЖЕНО</div>
@@ -535,7 +552,7 @@ async function deathScreen() {
       </div>
       <div class="scene-foot">
         <span class="faint" style="font-size:10px;color:#8a9a94">объект больше не числится среди живых</span>
-        <button class="button primary" data-go="space" style="border-color:#8a9a94;color:#e6ece8">Открыть глаза</button>
+        <button class="button primary" data-go="space" style="border-color:#8a9a94;color:#e6ece8">Отпустить</button>
       </div>
     </div>`);
   await typeText($("#death-h"), LIFE.death || (LIFE.gender === 'f' ? "Ты умерла." : "Ты умер."), 90);
@@ -555,14 +572,13 @@ function pause(ms) {
 //  КОСМОС: вид от первого лица. Ты — сущность. Камера = глаза.
 // ============================================================
 function spaceScreen() {
+  runPhase = 'space';
   render(`
     <canvas id="space"></canvas>
     <div class="hud">
       <div class="hud-row">
         <div class="panel">
-          <div class="eyebrow">объект · ${LIFE.name}</div>
-          <p>СОСТОЯНИЕ: <b>ПОСЛЕ</b></p>
-          <p class="memory-quiet">ПАМЯТЬ: <b>${LIFE.memories.length} ФРАГМЕНТА</b></p>
+          <div class="eyebrow">теперь можно просто быть</div>
         </div>
         <div class="panel navigation-panel" style="text-align:right">
           <div class="eyebrow">навигация</div>
@@ -582,23 +598,32 @@ function spaceScreen() {
         </div>
         <div class="stick" id="stick" role="group" aria-label="тяга"><i></i></div>
         <div class="keys">
-          <button class="button" id="k-scan">Сканировать</button>
+          <button class="button" id="k-scan">Прислушаться</button>
           <button class="button ghost" id="k-slow">Покой</button>
+          <button class="button ghost" data-sound>Звук включён</button>
+          <button class="button ghost" data-go="title">Вернуться</button>
         </div>
       </div>
     </div>
-    <div class="hint" id="hint">СВАЙП — ВЗГЛЯД · ДЖОЙСТИК — ДВИЖЕНИЕ</div>
+    <div class="hint" id="hint">Проведи по небу, чтобы оглядеться.<br>Круг слева — движение. Здесь не нужно никуда успевать.</div>
     <div id="overlay-host"></div>`);
 
   AudioLayer.ensure();
   AudioLayer.fade(0.16, 3); // тихий гул включается при выходе в космос
-  flashOn();
 
   const canvas = $("#space"), ctx = canvas.getContext("2d");
   let W = 0, H = 0, DPR = 1;
 
   // --- камера (глаза сущности): старт у Земли, взгляд на Солнце ---
   const cam = { yaw: -2.34, pitch: -0.08, pos: { x: 82, y: 3.2, z: 106 }, vel: { x: 0, y: 0, z: 0 } };
+  if (flightCheckpoint && ['yaw', 'pitch'].every(k => Number.isFinite(flightCheckpoint[k])) && ['x', 'y', 'z'].every(k => Number.isFinite(flightCheckpoint.pos?.[k]))) {
+    cam.yaw = flightCheckpoint.yaw; cam.pitch = clamp(flightCheckpoint.pitch, -1.35, 1.35);
+    cam.pos = { ...flightCheckpoint.pos };
+  }
+  const saveFlight = () => { flightCheckpoint = { yaw: cam.yaw, pitch: cam.pitch, pos: { ...cam.pos } }; persistRun(); };
+  saveFlight();
+  const saveTimer = setInterval(saveFlight, 5000);
+  addEventListener('pagehide', saveFlight);
   const FOV = 1.05; // радиан по горизонтали
   // На телефоне взгляд чувствительнее к дрожанию пальца: меньше усиление и сглаживание ниже.
   const LOOK_GAIN = matchMedia('(pointer: coarse)').matches ? 1.1 : 2.4;
@@ -680,7 +705,7 @@ function spaceScreen() {
       renderer.domElement.className = 'space-webgl';
       canvas.insertAdjacentElement('beforebegin', renderer.domElement);
       const scene = new THREE.Scene();
-      const skyFile = coarse ? 'milky-way-4k.jpg' : 'milky-way-8k.jpg';
+      const skyFile = 'milky-way-4k.jpg';
       const sky = new THREE.TextureLoader().load(`assets/${skyFile}`);
       sky.mapping = THREE.EquirectangularReflectionMapping;
       sky.colorSpace = THREE.SRGBColorSpace;
@@ -1310,7 +1335,7 @@ void main(){
       });
       nebulaGroup.rotation.y = state.t * 0.00008;
       nebulaSprites.forEach(sprite => {
-        sprite.material.opacity = sprite.userData.base * (0.82 + 0.18 * Math.sin(state.t * 0.16 + sprite.userData.phase));
+        sprite.material.opacity = sprite.userData.base * (space3d.quality.level === 'economy' ? .55 : .72) * (0.82 + 0.18 * Math.sin(state.t * 0.16 + sprite.userData.phase));
       });
       camera.lookAt(cam.pos.x + B.f.x, cam.pos.y + B.f.y, cam.pos.z + B.f.z);
       meshes.forEach((mesh, i) => {
@@ -1419,6 +1444,9 @@ void main(){
     state.braking = true;
   };
   $("#k-scan").onclick = () => {
+    quietSignal(['Тебе больше не нужно ничего доказывать.', 'Внизу осталось всё, что казалось бесконечным.', 'Ты здесь. Этого достаточно.', 'Тишина не требует ответа.'][Math.floor(state.t / 17) % 4], 8000);
+    AudioLayer.ping(220, 3, 0.012);
+    return;
     AudioLayer.ping(760, 0.6, 0.1);
     const undiscovered = EXPEDITIONS
       .filter((exp) => !RUN.expeditions.includes(exp.id))
@@ -1511,6 +1539,8 @@ void main(){
       actions: [["Записать в память", "keep"], ["Улететь", "leave"]],
     });
     if (go === "keep") {
+      RUN.memories.add('moon-voice');
+      persistRun();
       toast("ПАМЯТЬ 06 · СОХРАНЕНА.<br>СТАТУС: <span style='color:var(--danger)'>НЕ СОВПАДАЕТ С АРХИВОМ.</span>");
     }
   }
@@ -1588,16 +1618,22 @@ void main(){
   // скрыть подсказку через 6с
   setTimeout(() => { const h = $("#hint"); if (h) { h.style.opacity = "0"; h.style.transition = "opacity 1.2s"; } }, 6000);
 
-  const onVisible = () => { if (!document.hidden && !state.dead && !state.raf) { state.last = 0; state.raf = requestAnimationFrame(frame); } };
+  const resetInput = () => { endLook(); endStick(); Object.keys(keyThrust).forEach(k => keyThrust[k] = false); applyKeyThrust(); };
+  addEventListener('blur', resetInput);
+  const onVisible = () => { if (document.hidden) { resetInput(); saveFlight(); } if (!document.hidden && !state.dead && !state.raf) { state.last = 0; state.raf = requestAnimationFrame(frame); } };
   document.addEventListener("visibilitychange", onVisible);
   cleanupSpace = () => {
+    saveFlight();
+    clearInterval(saveTimer);
+    removeEventListener('pagehide', saveFlight);
     state.dead = true; cancelAnimationFrame(state.raf);
     removeEventListener("resize", resize);
+    removeEventListener('blur', resetInput);
     document.removeEventListener("visibilitychange", onVisible);
     removeEventListener("keydown", onKD); removeEventListener("keyup", onKU);
     if (space3d) {
       space3d.scene.background?.dispose();
-      space3d.scene.traverse((o) => { o.geometry?.dispose(); o.material?.map?.dispose(); o.material?.dispose(); });
+      space3d.scene.traverse((o) => { o.geometry?.dispose(); o.material?.map?.dispose(); Object.values(o.material?.uniforms || {}).forEach(u => { if (u.value?.isTexture) u.value.dispose(); }); o.material?.dispose(); });
       space3d.renderer.dispose();
       space3d.renderer.forceContextLoss();
     }
@@ -1609,9 +1645,16 @@ void main(){
 // ---------- маршрутизация ----------
 let memIdx = 0;
 document.addEventListener("click", (e) => {
-  if (AudioLayer.ctx?.state === "suspended") AudioLayer.ctx.resume().catch(() => {});
+  if (e.target.closest('[data-sound]')) {
+    AudioLayer.muted = !AudioLayer.muted;
+    if (AudioLayer.muted) AudioLayer.ctx?.suspend(); else { AudioLayer.ensure(); AudioLayer.ctx?.resume(); }
+    document.querySelectorAll('[data-sound]').forEach(b => { b.textContent = AudioLayer.muted ? 'Звук выключен' : 'Звук включён'; b.setAttribute('aria-pressed', String(AudioLayer.muted)); });
+    return;
+  }
+  if (!AudioLayer.muted && AudioLayer.ctx?.state === "suspended") AudioLayer.ctx.resume().catch(() => {});
   const decision = e.target.closest("[data-choice]");
   if (decision) {
+    if (decision.disabled || RUN.choices[memIdx] != null) return;
     Haptics.impact("light");
     RUN.choices[memIdx] = decision.dataset.choice;
     RUN.memories.add(decision.dataset.effect);
@@ -1639,13 +1682,17 @@ document.addEventListener("click", (e) => {
     return;
   }
   const choice = e.target.closest('[data-life]');
-  if (choice) { LIFE = lifePool.find((life) => String(life.id) === choice.dataset.life) || lifePool[0]; chooseScreen(); return; }
+  if (choice) { LIFE = lifePool.find((life) => String(life.id) === choice.dataset.life) || lifePool[0]; persistRun(); chooseScreen(); return; }
   const go = e.target.closest("[data-go]")?.dataset.go;
   if (!go) return;
   AudioLayer.ensure();
   Haptics.selection();
   if (go === "title") titleScreen();
   if (go === "resume") restoreRun();
+  if (go === 'begin') {
+    if (hasActiveRun() && !confirm('Начать другую жизнь? Текущее воспоминание будет заменено.')) return;
+    pickLives(); memoryScreen(0);
+  }
   if (go === "choose") {
     if (hasActiveRun() && !confirm("Незавершённая запись будет заменена новой. Продолжить?")) return;
     pickLives(); chooseScreen();
@@ -1654,7 +1701,7 @@ document.addEventListener("click", (e) => {
     if (hasActiveRun() && !confirm("Незавершённая запись будет заменена новой пятёркой. Продолжить?")) return;
     pickLives(); chooseScreen();
   }
-  if (go === "mem") { memIdx = 0; memoryScreen(0); }
+  if (go === "mem") { memIdx = 0; persistRun(); memoryScreen(0); }
   if (go === "next") { memIdx++; persistRun(); memoryScreen(memIdx); }
   if (go === "death") deathScreen();
   if (go === "space") transitionToSpace();
@@ -1664,3 +1711,8 @@ document.addEventListener("click", (e) => {
 // старт: короткое «пробуждение» и титул
 render(`<div class="screen" style="place-items:end center"><span class="faint" style="padding-bottom:40px">— — —</span></div>`);
 titleScreen();
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) AudioLayer.ctx?.suspend().catch(() => {});
+  else if (!AudioLayer.muted && AudioLayer.started) AudioLayer.ctx?.resume().catch(() => {});
+});
+TG?.BackButton?.onClick?.(() => titleScreen());

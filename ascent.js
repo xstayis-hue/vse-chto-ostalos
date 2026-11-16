@@ -10,7 +10,7 @@ function playAscent(host, person, onDone, onPrepare) {
   caption.className = 'ascent-caption';
   const flash = document.createElement('div');
   flash.className = 'ascent-flash';
-  let done = false, raf = 0, renderer = null;
+  let done = false, prepared = false, raf = 0, renderer = null;
   const cleanup = [];
   function finish() {
     if (done) return; done = true;
@@ -29,6 +29,7 @@ function playAscent(host, person, onDone, onPrepare) {
   const last = (person?.memories?.length || 6) - 2;
   const url = typeof memoryImageUrl === 'function' ? memoryImageUrl(person, last) : '';
   if (url) memLayer.style.backgroundImage = `url("${url}")`;
+  if (typeof composedMemoryUrl === 'function') composedMemoryUrl(person, last).then(src => { if (src && !done) memLayer.style.backgroundImage = `url("${src}")`; });
 
   try {
     renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -128,6 +129,16 @@ function playAscent(host, person, onDone, onPrepare) {
   sunSprite.position.copy(sunDir).multiplyScalar(60);
   sunSprite.scale.setScalar(14);
   scene.add(sunSprite);
+  cleanup.push(() => {
+    scene.traverse((object) => {
+      object.geometry?.dispose();
+      const material = object.material;
+      material?.map?.dispose();
+      Object.values(material?.uniforms || {}).forEach(u => { if (u.value?.isTexture) u.value.dispose(); });
+      material?.dispose();
+    });
+    renderer.forceContextLoss();
+  });
 
   // Camera path: from just above the night side near the terminator, rising and turning
   // so the horizon curve and sunrise come into view, then pulling far away.
@@ -144,14 +155,14 @@ function playAscent(host, person, onDone, onPrepare) {
     [15200, 19600, female ? 'всё, что ты любила, — под этой тонкой полосой.' : 'всё, что ты любил, — под этой тонкой полосой.'],
     [22400, 26600, 'вот она. вся.'],
   ];
-  const TOTAL = 28500;
+  const TOTAL = 22000;
   const t0 = performance.now();
   const camPos = new THREE.Vector3(), look = new THREE.Vector3();
-  let prepared = false;
 
   function frame(now) {
     if (!host.isConnected) { finish(); return; }
-    const t = now - t0;
+    const elapsed = now - t0;
+    const t = elapsed * 28500 / TOTAL;
 
     // 1: memory overexposes, white holds, then opens onto the Earth
     const over = seg(t, 400, 3800);
@@ -159,7 +170,7 @@ function playAscent(host, person, onDone, onPrepare) {
     memLayer.style.filter = `brightness(${1 + over * 3}) blur(${over * 6}px) saturate(${1 - over})`;
     memLayer.style.transform = `scale(${1 + over * 0.08})`;
     flash.style.opacity = String(1 - seg(t, 1200, 7000));
-    memLayer.style.display = 'none';
+    if (t > 4600) memLayer.style.display = 'none';
 
     // 2-4: altitude grows exponentially; the view tilts from horizon to planet
     const rise = seg(t, 4200, 26500);
@@ -175,17 +186,21 @@ function playAscent(host, person, onDone, onPrepare) {
     camera.lookAt(look);
     earth.rotation.y += 0.00004;
 
-    renderer.toneMappingExposure = 0.9 + 0.3 * seg(t, 13000, 18000) - 0.3 * seg(t, TOTAL - 1600, TOTAL);
+    renderer.toneMappingExposure = .9;
     renderer.render(scene, camera);
 
     let text = '', ca = 0;
     for (const [a, b, s] of lines) if (t >= a && t <= b) { text = s; ca = Math.min(1, (t - a) / 1000, (b - t) / 1000); }
     if (caption.textContent !== text) caption.textContent = text;
     caption.style.opacity = ca.toFixed(3);
-    if (t >= TOTAL - 3200 && !prepared) { prepared = true; onPrepare?.(); }
-    host.style.opacity = String(1 - seg(t, TOTAL - 2600, TOTAL));
+    if (t >= 25300 && !prepared) {
+      prepared = true;
+      const forward = new THREE.Vector3(); camera.getWorldDirection(forward);
+      onPrepare?.({ pos: { x: camera.position.x, y: camera.position.y, z: camera.position.z }, yaw: Math.atan2(forward.x, forward.z), pitch: Math.asin(forward.y) });
+    }
+    host.style.opacity = String(1 - seg(t, 25900, 28500));
 
-    if (t >= TOTAL) { finish(); return; }
+    if (elapsed >= TOTAL) { finish(); return; }
     raf = requestAnimationFrame(frame);
   }
   raf = requestAnimationFrame(frame);
