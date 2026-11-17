@@ -492,12 +492,14 @@ async function memoryScreen(idx) {
   $(".witness")?.classList.add("can-choose");
   if (RUN.choices[idx] == null) stage.querySelectorAll('[data-choice]').forEach((button) => { button.disabled = false; });
   const next = $(".witness-next");
-  if (next && !(choices.length && RUN.choices[idx] == null)) next.disabled = false;
+  if (next) next.disabled = false;
   if (idx + 1 < total) window.MemoryWorld?.image(LIFE, idx + 1);
-  const whispers = ["ты помнишь это иначе.", "здесь было теплее.", "кто-то ещё был в комнате.", `ты не сказал${LIFE.gender === 'f' ? 'а' : ''} этого вслух.`, `это было в последний раз. ты не знал${LIFE.gender === 'f' ? 'а' : ''}.`, "отсюда уже никто не смотрит."];
+  // Do not invent extra witnesses, unspoken words or a "last time" that the
+  // biography never established. Only explicitly authored annotations belong here.
+  const annotation = m.whisper || '';
   await pause(7000);
   const w = whisper;
-  if (w?.isConnected && !w.textContent) { w.textContent = whispers[idx % whispers.length]; AudioLayer.whisper?.(); }
+  if (annotation && w?.isConnected && !w.textContent) { w.textContent = annotation; AudioLayer.whisper?.(); }
 }
 
 function plural(n, one, few, many) {

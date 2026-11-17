@@ -7,7 +7,16 @@ const context = { window: {} };
 vm.runInNewContext(fs.readFileSync('content.js', 'utf8'), context);
 const lives = context.window.CURATED_LIVES;
 
-test('all 3000 memories compile to distinct deterministic scene descriptions', () => {
+test('photographic adults use calibrated head-to-sole scale, not miniature cutouts', () => {
+  const { plateLayout } = require('./memory-world.js');
+  for (const loc of ['hospital', 'kitchen', 'bedroom', 'school', 'office']) {
+    const layout = plateLayout(loc);
+    assert.ok(layout.height >= .78 && layout.height <= .9, loc);
+    assert.ok(layout.feet <= 1 && layout.feet - layout.height >= 0, loc);
+  }
+});
+
+test('all offered memories compile to distinct deterministic scene descriptions', () => {
   const signatures = new Set();
   for (const life of lives) for (let i = 0; i < life.memories.length; i++) {
     const scene = describe(life, i);
@@ -16,7 +25,7 @@ test('all 3000 memories compile to distinct deterministic scene descriptions', (
     assert.ok(Number.isFinite(scene.year));
     assert.ok(scene.camera.z > scene.blocking.z);
   }
-  assert.equal(signatures.size, 3000);
+  assert.equal(signatures.size, lives.length * 6);
 });
 test('one person keeps appearance and home materials across life stages', () => {
   for (const life of lives) {

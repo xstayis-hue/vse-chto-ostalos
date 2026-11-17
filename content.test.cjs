@@ -17,8 +17,9 @@ const LOCS = new Set(['roddom', 'kitchen', 'yard', 'school', 'bedroom', 'platfor
 const TIMES = new Set(['day', 'dusk', 'night']);
 const AGES = new Set(['baby', 'child', 'teen', 'adult', 'old', 'none']);
 
-test('catalog contains exactly 500 lives', () => {
-  assert.equal(loadLives().length, 500);
+test('catalog offers authored stories and explicitly connected routes, not random permutations', () => {
+  assert.equal(loadLives().length, 27);
+  assert.ok(loadLives().every(l => l.shape === 'authored' || l.reviewed && l.route.length === 6));
   assert.equal(loadLives().filter((l) => l.id >= 1001 && l.id <= 1012).length, 12);
 });
 
@@ -84,9 +85,18 @@ test('no broken text', () => {
   for (const life of loadLives()) {
     const text = JSON.stringify(life);
     assert.ok(!text.includes('undefined') && !text.includes('NaN'), life.name);
+    assert.ok(!/котлеты, рассказанные|Сто сорок три штуки/.test(text), life.name);
     for (const m of life.memories) for (const s of [m.h, m.p, ...(m.choices || []).map((c) => c.label)]) {
       assert.ok(!/ {2}| \.|\s,/.test(s), `${life.name}: «${s}»`);
     }
+  }
+});
+
+test('every offered biography has reviewed metadata propagated to scene props', () => {
+  for (const life of loadLives()) {
+    assert.ok(life.reviewed && life.desire && life.last && life.symbol, life.name);
+    for (const m of life.memories) assert.equal(m.prop, life.symbol, life.name);
+    assert.ok(!/Архив не может определить|котлеты, рассказанные/.test(JSON.stringify(life)), life.name);
   }
 });
 
@@ -103,6 +113,14 @@ test('years increase and death is not after 2080', () => {
     const y = life.memories.slice(0, 5).map((m) => m.y);
     for (let i = 1; i < 5; i++) assert.ok(y[i] > y[i - 1], `${life.name} ${y}`);
     assert.ok(y[4] <= 2080, life.name);
+  }
+});
+
+test('reviewed route age labels match the actual year at every living stage', () => {
+  for (const life of loadLives().filter(l => l.route)) for (const m of life.memories.slice(0, 5)) {
+    const age = m.y - life.year;
+    assert.equal(m.age, age < 1 ? 'baby' : age < 13 ? 'child' : age < 20 ? 'teen' : age < 60 ? 'adult' : 'old', life.name);
+    assert.ok(!m.choices?.some(c => /Сжечь|Выбросить|Отдать в интернат|Перестать/.test(c.label)), life.name);
   }
 });
 

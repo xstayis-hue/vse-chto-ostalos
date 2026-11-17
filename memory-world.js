@@ -24,7 +24,7 @@
     const age = Math.max(0, year - birth);
     return {
       version: 1, seed, sceneSeed, id: `${person.id}:${index}`, index, loc, year,
-      age: memory.age || (age < 1 ? 'baby' : age < 13 ? 'child' : age < 20 ? 'teen' : age < 60 ? 'adult' : 'old'),
+      age: memory.age === 'none' ? 'none' : (age < 1 ? 'baby' : age < 13 ? 'child' : age < 20 ? 'teen' : age < 60 ? 'adult' : 'old'),
       time: memory.time || 'dusk', others: memory.others || 0, gender: person.gender,
       prop: String(memory.prop || person.symbol || ''), symbol: String(person.symbol || ''),
       outdoor: OUTDOORS.has(loc),
@@ -36,7 +36,21 @@
       weather: scene() < .35 ? 'rain' : 'haze', variation: scene(),
     };
   }
-  const api = { describe, hash, random, LOCATIONS };
+  // Head-to-sole height and contact point in the fixed photographic plates.
+  // Keep people in clear floor space, not through beds, desks or railings.
+  const PLATE_LAYOUTS = {
+    hospital: { x: .65, feet: .94, height: .82 },
+    kitchen: { x: .52, feet: .95, height: .86 },
+    bedroom: { x: .57, feet: .94, height: .82 },
+    roddom: { x: .57, feet: .94, height: .82 },
+    school: { x: .52, feet: .93, height: .78 },
+    office: { x: .52, feet: .94, height: .80 },
+    stairwell: { x: .50, feet: .95, height: .84 },
+    bus: { x: .50, feet: .95, height: .84 },
+    balcony: { x: .50, feet: .95, height: .83 },
+  };
+  const plateLayout = loc => ({ ...(PLATE_LAYOUTS[loc] || { x: .5, feet: .91, height: .72 }) });
+  const api = { describe, hash, random, LOCATIONS, plateLayout };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.MemoryWorld = api;
 })(typeof window === 'undefined' ? globalThis : window);
@@ -281,12 +295,17 @@ if (typeof window !== 'undefined') {
       return { scene, camera, dispose() { resources.forEach(r => r.dispose()); key.shadow.map?.dispose(); } };
     }
     const plates = new Map();
+    let varietyPromise;
+    function loadVariety() {
+      return varietyPromise ||= fetch('assets/photographic/variety.json?v=1')
+        .then(r => r.ok ? r.json() : {}).catch(() => ({}));
+    }
     const localPlates = new Set(MemoryWorld.LOCATIONS);
     const actors = new Map();
-    function loadActor(gender, age) {
+    function loadActor(gender, age, variant) {
       if (age === 'none' || age === 'baby') return Promise.resolve(null);
       const stage = age === 'teen' ? 'teen' : age === 'child' ? 'child' : age === 'old' ? 'old' : 'adult';
-      const key = `${gender === 'f' ? 'f' : 'm'}-${stage}`;
+      const key = variant || `${gender === 'f' ? 'f' : 'm'}-${stage}`;
       if (!actors.has(key)) actors.set(key, new Promise(resolve => {
         const img = new Image();
         img.onerror = () => { actors.delete(key); resolve(null); };
@@ -301,14 +320,26 @@ if (typeof window !== 'undefined') {
               p[i + 1] = Math.min(g, Math.max(r, b) + 8);
             }
           }
-          x.putImageData(pixels, 0, 0); resolve(c);
+          x.putImageData(pixels, 0, 0);
+          // Trim the green studio margins: height must mean head-to-sole,
+          // not the arbitrary dimensions of the source photograph.
+          let left = c.width, top = c.height, right = 0, bottom = 0;
+          for (let py = 0; py < c.height; py++) for (let px = 0; px < c.width; px++) {
+            if (p[(py * c.width + px) * 4 + 3] < 200) continue;
+            left = Math.min(left, px); right = Math.max(right, px);
+            top = Math.min(top, py); bottom = Math.max(bottom, py);
+          }
+          const trimmed = document.createElement('canvas');
+          trimmed.width = right - left + 1; trimmed.height = bottom - top + 1;
+          trimmed.getContext('2d').drawImage(c, left, top, trimmed.width, trimmed.height, 0, 0, trimmed.width, trimmed.height);
+          resolve(trimmed);
         };
         img.src = `assets/photographic/${key}-actor.jpg`;
       }));
       return actors.get(key);
     }
     function loadPlate(loc) {
-      if (!localPlates.has(loc)) return Promise.resolve(null);
+      if (!localPlates.has(loc) && !loc.includes('-')) return Promise.resolve(null);
       if (!plates.has(loc)) plates.set(loc, new Promise(resolve => {
         const img = new Image(); img.onload = () => resolve(img); img.onerror = () => { plates.delete(loc); resolve(null); };
         img.src = `assets/photographic/${loc}-plate.jpg`;
@@ -319,16 +350,17 @@ if (typeof window !== 'undefined') {
       const c = document.createElement('canvas'); c.width = W; c.height = H;
       const x = c.getContext('2d'), rnd = MemoryWorld.random(d.sceneSeed);
       // Crop remains independent of character blocking; fixed plates have no baked actors.
-      const zoom = 1.03 + rnd() * .16, ratio = W / H;
+      const zoom = 1, ratio = W / H;
       const sw = Math.min(plate.width, plate.height * ratio) / zoom, sh = sw / ratio;
-      const sx = (plate.width - sw) * (.3 + rnd() * .4), sy = (plate.height - sh) * (.25 + rnd() * .35);
+      const sx = (plate.width - sw) / 2, sy = (plate.height - sh) / 2;
       x.filter = `saturate(${.45 + d.variation * .25}) brightness(${d.time === 'night' ? .9 : 1.08})`;
       x.drawImage(plate, sx, sy, sw, sh, 0, 0, W, H); x.filter = 'none';
       if (actor) {
-        const size = d.age === 'child' ? .34 : d.age === 'teen' ? .46 : .53;
+        const setting = d.plateLayout || MemoryWorld.plateLayout(d.loc);
+        const size = setting.height * (d.age === 'child' ? .67 : d.age === 'teen' ? .94 : 1);
         const h = H * size * d.identity.stature, w = h * actor.width / actor.height;
-        const ax = W * (.5 + d.blocking.x * .09), feet = H * (.83 + d.variation * .035);
-        x.save(); x.fillStyle = 'rgba(0,0,0,.25)'; x.filter = 'blur(8px)'; x.beginPath(); x.ellipse(ax, feet - h * .055, w * .3, h * .025, 0, 0, Math.PI * 2); x.fill(); x.restore();
+        const ax = W * setting.x, feet = H * setting.feet;
+        x.save(); x.fillStyle = 'rgba(0,0,0,.42)'; x.filter = 'blur(4px)'; x.beginPath(); x.ellipse(ax, feet - 2, w * .36, h * .018, 0, 0, Math.PI * 2); x.fill(); x.restore();
         const dressed = document.createElement('canvas'); dressed.width = actor.width; dressed.height = actor.height;
         const dress = dressed.getContext('2d'); dress.drawImage(actor, 0, 0);
         dress.globalCompositeOperation = 'source-atop'; dress.globalAlpha = .24;
@@ -336,10 +368,7 @@ if (typeof window !== 'undefined') {
         dress.fillStyle = d.age === 'old' ? '#8f8d82' : d.identity.hair; dress.fillRect(0, 0, actor.width, actor.height * .24);
         x.save(); x.filter = `brightness(${d.time === 'night' ? .65 : .8}) saturate(.5) sepia(${.1 + d.variation * .2}) blur(.45px)`;
         x.globalAlpha = .96; x.drawImage(dressed, ax - w / 2, feet - h, w, h); x.restore();
-        if (d.others) {
-          x.save(); x.globalAlpha = .45; x.filter = 'blur(2px) brightness(.65) saturate(.3)';
-          x.drawImage(actor, W * (d.home.window < 0 ? .73 : .12), H * .37, w * .6, h * .6); x.restore();
-        }
+        // Never duplicate the protagonist as a miniature "other person".
       } else { x.save(); x.globalAlpha = .8; x.filter = 'blur(1px)'; x.drawImage(foreground, 0, 0); x.restore(); }
       // Foreground occlusion: looking through a doorway, never a decorative UI frame.
       if (!d.outdoor && d.variation < .6) {
@@ -347,14 +376,8 @@ if (typeof window !== 'undefined') {
         x.fillStyle = 'rgba(10,9,8,.8)'; x.fillRect(side, 0, 80, H);
         x.fillStyle = 'rgba(70,62,48,.25)'; x.fillRect(side + (side ? 0 : 75), 0, 5, H);
       }
-      // A recurrent physical keepsake, drawn at a consistent scale in the foreground.
-      const prop = d.prop.toLowerCase(), px = 170 + rnd() * 750, py = H - 75 - rnd() * 50;
-      x.save(); x.translate(px, py); x.rotate((rnd() - .5) * .3); x.shadowColor = '#000'; x.shadowBlur = 8; x.shadowOffsetY = 5;
-      if (/письм|конверт|фото|снимок|билет/.test(prop)) {
-        x.fillStyle = '#a39c87'; x.fillRect(-22, -12, 44, 27);
-        if (/фото|снимок/.test(prop)) { x.fillStyle = '#414b46'; x.fillRect(-18, -9, 36, 18); }
-      }
-      x.restore();
+      // Keepsakes need a calibrated physical surface; never scatter symbolic
+      // photographs or letters onto an arbitrary foreground floor.
       const shade = x.createRadialGradient(W * .5, H * .4, H * .15, W * .5, H * .5, W * .75);
       shade.addColorStop(0, 'rgba(0,0,0,0)'); shade.addColorStop(1, 'rgba(0,0,0,.65)'); x.fillStyle = shade; x.fillRect(0, 0, W, H);
       if (d.weather === 'rain' && d.outdoor) {
@@ -369,7 +392,19 @@ if (typeof window !== 'undefined') {
       if (cache.has(d.id)) return cache.get(d.id);
       let world;
       try {
-        const [plate, actor] = await Promise.all([loadPlate(d.loc), loadActor(d.gender, d.age)]);
+        const variety = await loadVariety();
+        const matches = item => (!item.time || item.time === d.time)
+          && (!item.shapes || item.shapes.includes(person.shape))
+          && (!item.lifeIds || item.lifeIds.includes(person.id))
+          && (!item.locations || item.locations.includes(d.loc))
+          && (item.outdoor == null || item.outdoor === d.outdoor);
+        const environments = (variety.plates?.[d.loc] || []).filter(matches);
+        const environment = environments.length ? environments[d.seed % environments.length] : null;
+        if (environment) d.plateLayout = environment.layout;
+        const outfits = (variety.actors?.[`${d.gender}-${d.age}`] || [])
+          .filter(matches);
+        const outfit = outfits.length ? outfits[d.seed % outfits.length] : null;
+        const [plate, actor] = await Promise.all([loadPlate(environment?.key || d.loc), loadActor(d.gender, d.age, outfit?.key)]);
         if ((failed || !window.THREE) && !plate) return null;
         if (plate && (actor || d.age === 'none' || d.age === 'baby' || failed || !window.THREE)) {
           const blank = document.createElement('canvas'); blank.width = W; blank.height = H;

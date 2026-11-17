@@ -24,7 +24,7 @@ let generation = 0;
 CURATED_LIVES.forEach((p,i) => { const option = document.createElement('option'); option.value=i; option.textContent=`${p.name} · ${p.year}`; select.append(option); });
 async function show(compare = false) {
   const token = ++generation; frames.replaceChildren();
-  const start=Number(select.value), people=compare ? [0,173,349].map(n=>CURATED_LIVES[(start+n)%500]) : [CURATED_LIVES[start]];
+  const start=Number(select.value), people=compare ? [0,9,18].map(n=>CURATED_LIVES[(start+n)%CURATED_LIVES.length]) : [CURATED_LIVES[start]];
   for (const person of people) for (const index of (compare ? [1,4] : [0,1,2,3,4,5])) {
     const figure=document.createElement('figure'), placeholder=document.createElement('div'), caption=document.createElement('figcaption');
     placeholder.className='pending'; placeholder.textContent='Проявляется воспоминание…';
@@ -35,7 +35,7 @@ async function show(compare = false) {
     else placeholder.textContent='WebGL недоступен на этом устройстве';
   }
 }
-select.onchange=()=>show(); document.querySelector('#random').onclick=()=>{select.value=Math.floor(Math.random()*500);show();};
+select.onchange=()=>show(); document.querySelector('#random').onclick=()=>{select.value=Math.floor(Math.random()*CURATED_LIVES.length);show();};
 document.querySelector('#compare').onclick=()=>show(true); show();
 </script>
 </html>

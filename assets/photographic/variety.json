@@ -1,0 +1,26 @@
+{
+  "description": "Only visually reviewed assets belong in this runtime manifest. Layout uses normalised head-to-sole height and floor contact.",
+  "plates": {
+    "hospital": [{ "key": "hospital-sunlit", "time": "day", "layout": { "x": 0.40, "feet": 0.94, "height": 0.78 } }],
+    "kitchen": [{ "key": "kitchen-warm", "time": "day", "layout": { "x": 0.51, "feet": 0.96, "height": 0.87 } }],
+    "bedroom": [{ "key": "bedroom-family", "time": "day", "layout": { "x": 0.62, "feet": 0.96, "height": 0.83 } }],
+    "yard": [{ "key": "yard-summer", "time": "day", "layout": { "x": 0.50, "feet": 0.92, "height": 0.70 } }],
+    "school": [{ "key": "school-village", "time": "day", "layout": { "x": 0.48, "feet": 0.97, "height": 0.86 } }],
+    "platform": [{ "key": "platform-autumn", "time": "day", "layout": { "x": 0.43, "feet": 0.93, "height": 0.72 } }],
+    "factory": [{ "key": "factory-workshop", "time": "day", "layout": { "x": 0.51, "feet": 0.94, "height": 0.77 } }],
+    "empty": [{ "key": "empty-livedin", "time": "day", "layout": { "x": 0.52, "feet": 0.94, "height": 0.81 } }],
+    "sea": [{ "key": "sea-harbour", "shapes": ["моряк"], "layout": { "x": 0.51, "feet": 0.93, "height": 0.72 } }],
+    "field": [{ "key": "field-orchard", "lifeIds": [1012], "layout": { "x": 0.50, "feet": 0.93, "height": 0.73 } }],
+    "office": [{ "key": "office-clinic", "shapes": ["районный врач"], "layout": { "x": 0.53, "feet": 0.95, "height": 0.83 } }]
+  },
+  "actors": {
+    "f-adult": [{ "key": "f-adult-summer", "outdoor": false }],
+    "m-adult": [{ "key": "m-adult-worker", "shapes": ["рабочий закрывающегося завода"], "locations": ["factory"] }],
+    "m-old": [{ "key": "m-old-cardigan", "outdoor": false }],
+    "f-old": [{ "key": "f-old-cardigan", "outdoor": false }],
+    "f-teen": [{ "key": "f-teen-summer", "outdoor": false }],
+    "m-teen": [{ "key": "m-teen-shirt", "outdoor": false }],
+    "f-child": [{ "key": "f-child-summer", "outdoor": false }],
+    "m-child": [{ "key": "m-child-summer", "outdoor": false }]
+  }
+}
