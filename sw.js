@@ -1,5 +1,5 @@
-const CACHE = 'ostalos-experience-v6';
-const CORE = ['./', './index.html', './app.js?v=19', './content.js?v=10', './styles.css?v=14', './experience.css?v=3', './memory-world.js?v=5', './memory-images.js?v=3', './memory-composer.js?v=2', './flight.js?v=2', './ascent.js?v=5', './assets/three.min.js', './assets/photographic/variety.json?v=1'];
+const CACHE = 'ostalos-experience-v7';
+const CORE = ['./', './index.html', './app.js?v=20', './content.js?v=10', './styles.css?v=14', './experience.css?v=3', './memory-world.js?v=5', './memory-images.js?v=3', './memory-composer.js?v=2', './flight.js?v=2', './ascent.js?v=5', './assets/three.min.js', './assets/space-art.jpg', './assets/space-finale.jpg', './assets/photographic/variety.json?v=1'];
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(CORE))));
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('ostalos-') && k !== CACHE).map(k => caches.delete(k))))));
 self.addEventListener('fetch', event => {
