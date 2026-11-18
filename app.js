@@ -109,6 +109,15 @@ const AudioLayer = {
       for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len) * .16;
       const noise = C.createBufferSource(); noise.buffer = buf; const nf = C.createBiquadFilter(); nf.type = "bandpass"; nf.frequency.value = index === 0 ? 1200 : 360; nf.Q.value = .45; noise.connect(nf); nf.connect(gain); noise.start(now); noise.stop(now + 3.6);
     }
+  },
+  placeCue(loc = '') {
+    if (!this.ctx || this.muted) return;
+    const C = this.ctx, now = C.currentTime;
+    const map = { kitchen: 92, room: 118, bedroom: 76, sea: 54, field: 48, platform: 145, hospital: 168, school: 132 };
+    const o = C.createOscillator(), g = C.createGain(), f = C.createBiquadFilter();
+    o.type = 'sine'; o.frequency.value = map[loc] || 62; f.type = 'lowpass'; f.frequency.value = 260;
+    g.gain.setValueAtTime(.0001, now); g.gain.exponentialRampToValueAtTime(.018, now + .7); g.gain.exponentialRampToValueAtTime(.0001, now + 5.5);
+    o.connect(f); f.connect(g); g.connect(C.destination); o.start(now); o.stop(now + 5.7);
   }
 };
 
@@ -387,7 +396,9 @@ function pickLives() {
 let cleanupSpace = null;
 function render(html) {
   if (cleanupSpace) { cleanupSpace(); cleanupSpace = null; }
+  stage.classList.add('is-changing');
   stage.innerHTML = html;
+  requestAnimationFrame(() => stage.classList.remove('is-changing'));
   document.querySelectorAll('[data-sound]').forEach(b => { b.textContent = AudioLayer.muted ? 'Звук выключен' : 'Звук включён'; b.setAttribute('aria-pressed', String(AudioLayer.muted)); });
 }
 
@@ -450,7 +461,7 @@ async function memoryScreen(idx) {
   render(`
     <div class="witness memory-decay" style="--decay:${(idx / Math.max(1, total - 1)).toFixed(2)}">
       <div class="witness-frame">
-        <div class="pixel-memory" aria-hidden="true"><canvas class="pixel-background" width="480" height="270"></canvas><canvas class="pixel-actor" width="480" height="270"></canvas></div>
+        <div class="pixel-memory" aria-hidden="true"><canvas class="pixel-background" width="480" height="270"></canvas><canvas class="pixel-actor" width="480" height="270"></canvas><div class="memory-atmosphere" data-fx="${m.fx || 'after'}"></div>${m.prop ? `<div class="memory-keepsake">${escapeHTML(m.prop)}</div>` : ''}</div>
       </div>
       <div class="witness-meta"><span>${m.y}</span><span>${ageWord}</span></div>
       ${idx === 0 ? '<blockquote class="witness-scripture"><span>«Я свет миру; кто последует за Мною, тот не будет ходить во тьме.»</span><cite>Ин. 8:12</cite></blockquote>' : ''}
@@ -481,6 +492,8 @@ async function memoryScreen(idx) {
     frame.classList.add('has-photo');
   });
   AudioLayer.memoryCue(idx);
+  AudioLayer.placeCue(m.loc || m.fx);
+  Haptics.impact(idx === 0 ? 'light' : 'soft');
   await pause(700);
   if (!heading?.isConnected) return;
   await typeText(heading, m.h, 22);

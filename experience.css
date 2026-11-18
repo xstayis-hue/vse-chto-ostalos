@@ -21,6 +21,7 @@ body { background: #000; }
 .witness-frame { position: absolute; inset: 0; width: 100%; min-width: 0; height: 100%; aspect-ratio: auto; z-index: -2; animation: witnessReveal 1800ms cubic-bezier(.22,1,.36,1) both; }
 .witness .pixel-memory { mask-image: none; -webkit-mask-image: none; animation: none; background: #131209; }
 .witness .pixel-memory::after { background: #000; opacity: .08; mix-blend-mode: normal; }
+.witness-frame::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(0,0,0,.12), transparent 35%, rgba(0,0,0,.18)); }
 .witness::after { content: ''; position: absolute; inset: 0; background: #000; opacity: .08; z-index: -1; pointer-events: none; }
 .memory-photo { image-rendering: auto; animation: witnessReveal 1800ms cubic-bezier(.22,1,.36,1) both, slowRecall 28s cubic-bezier(.22,1,.36,1) both; filter: saturate(.65) brightness(.95); }
 .witness.memory-decay { filter: none; }
