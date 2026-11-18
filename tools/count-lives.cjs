@@ -1,0 +1,10 @@
+const fs = require('fs');
+global.window = global;
+new Function(fs.readFileSync(__dirname + '/../content.js', 'utf8'))();
+const L = window.CURATED_LIVES;
+console.log('всего жизней:', L.length);
+console.log('показывается за раз:', Math.min(5, L.length));
+console.log('');
+L.forEach((l, i) => console.log(`${String(i + 1).padStart(2)}. ${l.name} — ${l.place}, ${l.year} — ${l.symbol}`));
+console.log('');
+console.log('кадров на жизнь:', L[0].memories.length);
