@@ -346,12 +346,13 @@ button:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
 .archive-title i { color: #7f9089; }
 .archive-hint { font-size: 10px; letter-spacing: .14em; color: #5a6c66; text-transform: lowercase; font-style: italic; }
 .archive-items { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.archive-item { width: 100%; display: grid; grid-template-columns: 34px 1fr; grid-template-rows: auto auto; column-gap: 8px; text-align: left; padding: 12px 8px; background: transparent; border: 0; border-bottom: 1px solid rgba(158,190,181,.08); color: #7f908a; transition: color .4s ease, background .4s ease; }
+.archive-item { width: 100%; display: grid; grid-template-columns: 34px minmax(0, 1fr); grid-template-rows: auto auto auto; column-gap: 10px; text-align: left; padding: 12px 8px; background: transparent; border: 0; border-bottom: 1px solid rgba(158,190,181,.08); color: #7f908a; transition: color .4s ease, background .4s ease; }
 .archive-item:hover { color: #c9d4cd; background: rgba(158,190,181,.04); }
 .archive-item.is-chosen { color: #e6eee9; background: rgba(176,101,98,.06); border-bottom-color: rgba(176,101,98,.35); }
-.archive-num { grid-row: 1 / 3; font-size: 10px; letter-spacing: .1em; color: #4c5d57; align-self: center; }
-.archive-name { font-size: 14px; letter-spacing: .04em; }
-.archive-meta { font-size: 10px; letter-spacing: .12em; color: #8fa59d; margin-top: 3px; }
+.archive-num { grid-column: 1; grid-row: 1 / 4; font-size: 10px; letter-spacing: .1em; color: #4c5d57; align-self: start; padding-top: 3px; }
+.archive-name { grid-column: 2; grid-row: 1; font-size: 14px; letter-spacing: .04em; }
+.archive-meta { grid-column: 2; grid-row: 2; font-size: 10px; letter-spacing: .12em; color: #8fa59d; margin-top: 3px; }
+.archive-kept { grid-column: 2; grid-row: 3; margin-top: 4px; font: italic 11px/1.4 Georgia, serif; color: #7d7a71; white-space: normal; }
 .archive-foot { margin-top: auto; border-top: 1px solid rgba(158,190,181,.12); padding-top: 16px; display: flex; flex-direction: column; gap: 14px; }
 .archive-last { font-style: italic; font-size: 13px; color: #8a9a94; min-height: 1.4em; }
 .archive-actions { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -493,16 +494,21 @@ button:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
 .witness-meta { width: min(100%, 560px); display: flex; justify-content: space-between; margin-top: 18px;
   font: 11px/1 Georgia, serif; font-style: italic; color: rgba(216,207,191,.38); letter-spacing: .04em; }
 .witness-text { position: relative; isolation: isolate; width: min(100%, 520px); margin-top: auto; margin-bottom: auto; padding: 18px 0; text-align: center; }
-.witness-text::before { content: ""; position: absolute; z-index: -1; inset: -22px -32px; background: radial-gradient(ellipse, rgba(0,0,0,.66), rgba(0,0,0,.28) 58%, transparent 76%); pointer-events: none; }
+.witness-text::before { content: ""; position: absolute; z-index: -1; inset: -32px -40px -24px; background: radial-gradient(ellipse at 40% 60%, rgba(0,0,0,.88), rgba(0,0,0,.66) 52%, rgba(0,0,0,.3) 74%, transparent 88%); pointer-events: none; }
 .witness-text h2 { font-size: clamp(22px, 6vw, 34px); line-height: 1.18; font-weight: 400; color: #e6dccb; margin: 0 0 14px; text-wrap: balance; }
 .witness-text p { font: 15px/1.55 Georgia, serif; color: rgba(216,207,191,.62); margin: 0; text-wrap: pretty; }
 .witness .witness-whisper { margin-top: 18px; font-size: 13px; font-style: italic; color: rgba(190,160,140,.5); min-height: 1.5em; animation: whisperIn 5s ease both; }
 .memory-atmosphere { position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: .28; mix-blend-mode: screen; }
-.memory-atmosphere[data-fx="rain"] { background: repeating-linear-gradient(112deg, transparent 0 18px, rgba(210,225,225,.16) 19px 20px, transparent 21px 44px); animation: rainDrift 2.8s linear infinite; }
+/* No repeating gradients here: striped overlays read as scan lines across the
+   photograph, not as weather. Only soft light belongs on top of a memory. */
+.memory-atmosphere[data-fx="rain"] { background: radial-gradient(ellipse at 40% 20%, rgba(198,216,222,.10), transparent 62%); animation: memoryBreath 9s ease-in-out infinite; }
 .memory-atmosphere[data-fx="ice"], .memory-atmosphere[data-fx="sea"] { background: radial-gradient(ellipse at 52% 48%, rgba(205,225,220,.12), transparent 56%); animation: memoryBreath 7s ease-in-out infinite; }
 .memory-atmosphere[data-fx="room"], .memory-atmosphere[data-fx="split"] { background: radial-gradient(ellipse at 64% 30%, rgba(235,210,150,.13), transparent 42%); animation: lightDrift 9s ease-in-out infinite; }
 .memory-atmosphere[data-fx="after"] { background: radial-gradient(ellipse at center, rgba(180,205,210,.12), transparent 60%); animation: memoryBreath 10s ease-in-out infinite; }
-.memory-keepsake { position: absolute; z-index: 3; left: 50%; bottom: 8%; transform: translateX(-50%); max-width: 70%; padding: 5px 10px; border-left: 1px solid rgba(220,210,175,.45); color: rgba(230,220,195,.62); font: italic 11px/1.3 Georgia, serif; opacity: 0; animation: keepsakeIn 1.2s 1.6s ease-out forwards; text-shadow: 0 1px 8px #000; }
+.memory-keepsake { position: absolute; z-index: 3; left: 50%; bottom: 2.5%; transform: translateX(-50%); max-width: 70%; padding: 0 14px; color: rgba(232,224,203,.46); font: italic 10px/1.3 Georgia, serif; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; animation: keepsakeIn 1.2s 1.6s ease-out forwards; text-shadow: 0 1px 10px #000; }
+.memory-keepsake::before, .memory-keepsake::after { content: ""; position: absolute; top: 50%; width: 18px; height: 1px; background: rgba(220,210,175,.26); }
+.memory-keepsake::before { left: -14px; }
+.memory-keepsake::after { right: -14px; }
 .witness-choices { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap;
   opacity: 0; transform: translateY(6px); transition: opacity 2.4s ease, transform 2.4s ease; pointer-events: none; }
 .witness.can-choose .witness-choices { opacity: 1; transform: none; pointer-events: auto; }

@@ -17,10 +17,16 @@ const LOCS = new Set(['roddom', 'kitchen', 'yard', 'school', 'bedroom', 'platfor
 const TIMES = new Set(['day', 'dusk', 'night']);
 const AGES = new Set(['baby', 'child', 'teen', 'adult', 'old', 'none']);
 
-test('catalog offers authored stories and explicitly connected routes, not random permutations', () => {
-  assert.equal(loadLives().length, 27);
-  assert.ok(loadLives().every(l => l.shape === 'authored' || l.reviewed && l.route.length === 6));
-  assert.equal(loadLives().filter((l) => l.id >= 1001 && l.id <= 1012).length, 12);
+test('every life is authored from scratch, without slot-filled permutations', () => {
+  assert.equal(loadLives().length, 12);
+  assert.ok(loadLives().every(l => l.shape === 'authored' && l.reviewed && l.authored));
+});
+
+test('every beat is written in the first person', () => {
+  for (const life of loadLives()) for (const m of life.memories) {
+    assert.ok(!/^Ты /.test(m.h), `${life.name}: second person in «${m.h}»`);
+    assert.ok(/\bя\b|\bмне\b|\bменя\b|мной/i.test(m.h) || /^[«]?[А-ЯA-Z]/.test(m.h), `${life.name}: «${m.h}»`);
+  }
 });
 
 test('all full names are unique', () => {

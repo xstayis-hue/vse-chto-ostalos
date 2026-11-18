@@ -441,10 +441,11 @@ async function titleScreen() {
   AudioLayer.fade(0.0001, 0.1);
   const saved = readSavedRun();
   const resumeLabel = saved ? (saved.phase === 'space' ? 'Вернуться в тишину' : 'Вспомнить дальше') : '';
+  const firstScripture = SCRIPTURES[0];
   render(`
     <div class="screen title-screen">
       <div class="title-topline"><span>Жизнь · память · тишина</span><button class="quiet-control" data-sound aria-pressed="false">Звук включён</button></div>
-      <div class="scripture-mark"><span>«Что Я делаю, теперь ты не знаешь, а уразумеешь после.»</span><small>Ин. 13:7</small></div>
+      <div class="scripture-mark"><span>${firstScripture[0]}</span><small>${firstScripture[1]}</small></div>
       <div class="title-wrap">
         <div class="eyebrow">ты уже был здесь</div>
         <h1 class="title serif"><span class="line">Всё, что от меня</span><span class="ost" data-t="ОСТАЛОСЬ">ОСТАЛОСЬ</span></h1>
@@ -458,97 +459,148 @@ async function titleScreen() {
     </div>`);
 }
 
+/* Not a character select. These are fragments surfacing in the last seconds:
+   the mind does not offer a menu, it hands over whatever it can still reach. */
 async function chooseScreen() {
   const current = LIFE;
-  const meta = readMeta();
   render(`
     <div class="screen archive-screen">
       <div class="archive-list">
-         <div class="archive-header"><span>АРХИВ · 01</span><span>${observerLabel()}</span></div>
-        <div class="archive-title serif">Кем ты был<br><i>до тишины?</i></div>
-        <div class="archive-hint">пять записей. одна из них — ты.</div>
+        <div class="archive-header"><span>последние секунды</span><span>${observerLabel()}</span></div>
+        <div class="archive-title serif">Что всплывает<br><i>первым?</i></div>
+        <div class="archive-hint">пять жизней. одна из них — та, которую ты сейчас доживаешь.</div>
         <ol class="archive-items">
-   ${offeredLives.map((person, i) => `
-     <li><button class="archive-item ${person.id === current.id ? "is-chosen" : ""}" data-life="${person.id}" aria-pressed="${person.id === current.id}">
-       <span class="archive-num">${String(i + 1).padStart(2, "0")}</span>
-       <span class="archive-name">${person.name}</span>
-       <span class="archive-meta">${person.year} · ${person.place}</span>
+          ${offeredLives.map((person, i) => `
+            <li><button class="archive-item ${person.id === current.id ? "is-chosen" : ""}" data-life="${person.id}" aria-pressed="${person.id === current.id}">
+              <span class="archive-num">${String(i + 1).padStart(2, "0")}</span>
+              <span class="archive-name">${person.name}</span>
+              <span class="archive-meta">${person.year} · ${person.place}</span>
+              <span class="archive-kept">${person.symbol}</span>
             </button></li>`).join("")}
         </ol>
         <div class="archive-foot">
-   <div class="archive-last"><span class="archive-last-label">последняя мысль · запись повреждена</span>«${current.last}»</div>
+          <div class="archive-last"><span class="archive-last-label">последняя мысль · запись повреждена</span>«${current.last}»</div>
           <div class="archive-actions">
-     <button class="button primary" data-go="mem">Прожить эту жизнь <span>↗</span></button>
-   </div>
+            <button class="button primary" data-go="mem">Вспомнить <span>↗</span></button>
+          </div>
         </div>
       </div>
     </div>`);
-  }
+}
 
+/* Каждая жизнь начинается со своей цитаты; весь набор цитат проекта сохранён. */
+const SCRIPTURES = [
+  ['«Я свет миру; кто последует за Мною, тот не будет ходить во тьме.»', 'Ин. 8:12'],
+  ['«Что Я делаю, теперь ты не знаешь, а уразумеешь после.»', 'Ин. 13:7'],
+  ['«Свет ещё на малое время есть с вами; ходите, пока есть свет, чтобы не объяла вас тьма.»', 'Ин. 12:35'],
+  ['«Род проходит, и род приходит, а земля пребывает во веки.»', 'Еккл. 1:4'],
+];
+
+/* Один кадр воспоминания — и он же переход к следующему.
+
+   Никаких кнопок и выборов. Жизнь проходит сама, как перед глазами: кадр
+   всплывает, читается, и глаза закрываются. Через 3–5 секунд они открываются
+   уже на другом возрасте. Так шесть кадров идут одним движением, без единого
+   действия игрока.
+
+   Слои, снизу вверх:
+     .memory-photo    кадр от первого лица
+     .blink           веки: чёрное поле, которое закрывает и открывает кадр
+     .witness-text    голос, который вспоминает
+   DyingFrame дополнительно замедляет сердцебиение к концу жизни. */
 async function memoryScreen(idx) {
   runPhase = 'memory';
   const m = LIFE.memories[idx];
   const total = LIFE.memories.length;
-  const choices = m.choices || [];
-  const ageNow = typeof m.y === "number" ? m.y - LIFE.year : null;
-  const ageWord = ageNow == null ? "" : ageNow === 0 ? "тебе нет и дня" : `тебе ${ageNow} ${plural(ageNow, "год", "года", "лет")}`;
-  const nextGo = idx + 1 < total ? "next" : "death";
+  const fem = LIFE.gender === 'f';
+  const ageNow = typeof m.y === 'number' ? m.y - LIFE.year : null;
+  const ageWord = ageNow == null ? '' : ageNow === 0 ? 'первый день' : `${ageNow} ${plural(ageNow, "год", "года", "лет")}`;
+  const progress = idx / Math.max(1, total - 1);
+  const scripture = LIFE.scripture || SCRIPTURES[(LIFE.id || 1) % SCRIPTURES.length];
   render(`
-    <div class="witness memory-decay" style="--decay:${(idx / Math.max(1, total - 1)).toFixed(2)}">
+    <div class="witness memory-decay" style="--decay:${progress.toFixed(2)}">
       <div class="witness-frame">
-        <div class="pixel-memory" aria-hidden="true"><canvas class="pixel-background" width="480" height="270"></canvas><canvas class="pixel-actor" width="480" height="270"></canvas><div class="memory-atmosphere" data-fx="${m.fx || 'after'}"></div>${m.prop ? `<div class="memory-keepsake">${escapeHTML(m.prop)}</div>` : ''}</div>
+        <div class="pixel-memory" aria-hidden="true">
+          <canvas class="pixel-background" width="480" height="270"></canvas>
+          <canvas class="pixel-actor" width="480" height="270"></canvas>
+          <div class="memory-atmosphere" data-fx="${m.fx || 'after'}"></div>
+          ${m.prop ? `<div class="memory-keepsake">${escapeHTML(m.prop)}</div>` : ''}
+        </div>
       </div>
       <div class="witness-meta"><span>${m.y}</span><span>${ageWord}</span></div>
-      ${idx === 0 ? '<blockquote class="witness-scripture"><span>«Я свет миру; кто последует за Мною, тот не будет ходить во тьме.»</span><cite>Ин. 8:12</cite></blockquote>' : ''}
+      ${idx === 0 ? `<blockquote class="witness-scripture"><span>${scripture[0]}</span><cite>${scripture[1]}</cite></blockquote>` : ''}
       <div class="witness-text">
         <h2 class="serif" id="cap-h"></h2>
         <p id="cap-p"></p>
-        <p class="witness-whisper" id="cap-w"></p>
       </div>
-      ${choices.length ? `<div class="witness-choices" role="group" aria-label="Что останется в памяти">
-          ${choices.map(c => {
-          const selected = RUN.choices[idx] === c.id;
-            return `<button class="witness-choice ${selected ? "selected" : ""}" data-choice="${c.id}" data-effect="${c.effect}" disabled>${c.label}</button>`;
-        }).join('<span class="witness-or">или</span>')}
-      </div>` : ""}
-      <div class="scene-foot witness-foot">
-        <button class="witness-next" data-go="${nextGo}" disabled>${idx + 1 < total ? "отпустить" : "отпустить всё"}</button>
-      </div>
+      <div class="blink" id="blink" aria-hidden="true"></div>
     </div>`);
-  const heading = $("#cap-h"), description = $("#cap-p");
+
+  const heading = $('#cap-h'), description = $('#cap-p');
   const frame = stage.querySelector('.pixel-memory');
-  const whisper = $("#cap-w");
+  const blink = $('#blink');
+
   composedMemoryUrl(LIFE, idx).then((src) => {
     if (!src || !frame?.isConnected) return;
-    const el = document.createElement('img');
-    el.className = 'memory-photo';
-    el.src = src; el.alt = '';
-    frame.insertBefore(el, frame.querySelector('.pixel-fx'));
+    // A 16:9 plate cropped into a phone frame keeps a fifth of the picture, so the
+    // same file fills the frame blurred and the photograph sits whole on top.
+    frame.style.setProperty('--plate', `url("${src}")`);
+    const img = document.createElement('img');
+    img.className = 'memory-photo';
+    img.src = src;
+    img.alt = '';
+    frame.insertBefore(img, frame.querySelector('.pixel-fx'));
     frame.classList.add('has-photo');
   });
+
   AudioLayer.memoryCue(idx);
   AudioLayer.placeCue(m.loc || m.fx);
   Haptics.impact(idx === 0 ? 'light' : 'soft');
-  await pause(700);
+  window.DyingFrame?.frame(stage, progress, AudioLayer.muted);
+
+  // Eyes open on this frame.
+  blink.classList.add('open');
+
+  await pause(600);
   if (!heading?.isConnected) return;
-  await typeText(heading, m.h, 22);
-  await pause(400);
-  if (heading?.isConnected) await typeText(description, m.p, 16);
-  // Hold: the moment must be stayed in before it can be let go.
-  await pause(1200);
+  await typeText(heading, m.h, 24);
+  await pause(320);
+  if (heading?.isConnected) await typeText(description, m.p, 15);
   if (!heading?.isConnected) return;
-  $(".witness")?.classList.add("can-choose");
-  if (RUN.choices[idx] == null) stage.querySelectorAll('[data-choice]').forEach((button) => { button.disabled = false; });
-  const next = $(".witness-next");
-  if (next) next.disabled = false;
-  if (idx + 1 < total) window.MemoryWorld?.image(LIFE, idx + 1);
-  // Do not invent extra witnesses, unspoken words or a "last time" that the
-  // biography never established. Only explicitly authored annotations belong here.
-  const annotation = m.whisper || '';
-  await pause(7000);
-  const w = whisper;
-  if (annotation && w?.isConnected && !w.textContent) { w.textContent = annotation; AudioLayer.whisper?.(); }
+
+  // How long this frame is held. Reading time, not a fixed delay: the beat lasts
+  // as long as the sentence needs, and the last frame stays longer than the first.
+  const chars = (m.h + m.p).length;
+  const hold = Math.min(9000, 2600 + chars * 26);
+  await pause(hold);
+  if (!heading?.isConnected) return;
+
+  // The eyes close. The next frame opens on its own.
+  const next = idx + 1 < total ? 'next' : 'death';
+  await closeEyes(blink);
+  if (!stage.querySelector('#blink')?.isConnected) return;
+  go(next);
 }
+
+/* 3.2 s shut: a fast squeeze, a held dark, then a slow lift. The dark is long
+   enough to feel like a blink between two ages rather than a fade. */
+function closeEyes(blink) {
+  if (!blink) return Promise.resolve();
+  blink.classList.remove('open');
+  blink.classList.add('shut');
+  return new Promise((done) => setTimeout(done, 3200));
+}
+
+const CHOICE_ECHO = {
+  memory: (f) => f ? 'Я запомнила это так, что помню до сих пор.' : 'Я запомнил это так, что помню до сих пор.',
+  silence: (f) => f ? 'Я оставила всё как было. Теперь уже не переделать.' : 'Я оставил всё как было. Теперь уже не переделать.',
+  earth: (f) => f ? 'Я осталась.' : 'Я остался.',
+  distance: (f) => f ? 'Я ушла, и это оказалось легче, чем я думала.' : 'Я ушёл, и это оказалось легче, чем я думал.',
+  voice: (f) => f ? 'Я ответила вслух.' : 'Я ответил вслух.',
+  quiet: (f) => f ? 'Я промолчала, и это тоже был ответ.' : 'Я промолчал, и это тоже был ответ.',
+};
+
+
 
 function plural(n, one, few, many) {
   const a = n % 10, b = n % 100;
@@ -592,7 +644,7 @@ async function deathScreen() {
     <div class="memory-stage">
       <div class="scene">
         <div class="fx last-light"></div>
-        <blockquote class="scene-scripture scene-scripture-dark"><span>«Свет ещё на малое время есть с вами; ходите, пока есть свет, чтобы не объяла вас тьма.»</span><cite>Ин. 12:35</cite></blockquote>
+        <blockquote class="scene-scripture scene-scripture-dark"><span>${(LIFE.scripture || SCRIPTURES[2])[0]}</span><cite>${(LIFE.scripture || SCRIPTURES[2])[1]}</cite></blockquote>
         <div class="caption" style="color:#1a221f">
           <div class="yeartag" style="color:#3c4a45">СЕРДЦЕБИЕНИЕ: НЕ ОБНАРУЖЕНО</div>
           <h2 class="serif" id="death-h"></h2>
@@ -605,13 +657,15 @@ async function deathScreen() {
         <button class="button primary" data-go="space" style="border-color:#8a9a94;color:#e6ece8">Отпустить</button>
       </div>
     </div>`);
-  await typeText($("#death-h"), LIFE.death || (LIFE.gender === 'f' ? "Ты умерла." : "Ты умер."), 90);
+  // Сцена смерти тоже говорит от первого лица: это последняя мысль,
+  // а не отчёт системы наблюдения.
+  await typeText($("#death-h"), 'Я больше не отвечаю.', 90);
   await pause(1600);
   if (!$("#death-p")) return;
-  await typeText($("#death-p"), "Это не было похоже на конец.", 60);
+  await typeText($("#death-p"), "Это не похоже на конец — скорее на комнату, из которой вышли, не закрыв дверь.", 60);
   await pause(2400);
   if (!$("#death-t")) return;
-  await typeText($("#death-t"), "Отсчёт времени не ведётся. Ожидание не имеет границ.", 40);
+  await typeText($("#death-t"), LIFE.last ? `Последнее, что я успела сказать: «${LIFE.last}».`.replace('успела', LIFE.gender === 'f' ? 'успела' : 'успел') : "Отсчёт времени не ведётся.", 40);
 }
 
 function pause(ms) {
@@ -1466,21 +1520,6 @@ document.addEventListener("click", (e) => {
     return;
   }
   if (!AudioLayer.muted && AudioLayer.ctx?.state === "suspended") AudioLayer.ctx.resume().catch(() => {});
-  const decision = e.target.closest("[data-choice]");
-  if (decision) {
-    if (decision.disabled || RUN.choices[memIdx] != null) return;
-    Haptics.impact("light");
-    RUN.choices[memIdx] = decision.dataset.choice;
-    RUN.memories.add(decision.dataset.effect);
-    persistRun();
-    decision.parentElement.querySelectorAll("[data-choice]").forEach((b) => {
-      b.disabled = true;
-      b.classList.toggle("selected", b === decision);
-    });
-    const advance = stage.querySelector(".scene-foot [data-go]");
-    if (advance) { advance.disabled = false; advance.scrollIntoView({ behavior: "smooth", block: "end" }); }
-    return;
-  }
   if (e.target.closest("[data-share]")) {
     Haptics.impact("medium");
     const text = resultText();

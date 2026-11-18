@@ -747,11 +747,23 @@
     });
 
     // asteroid belt: small, dark, numerous — reads as a field, not as floating rocks.
-    // The far half of the belt sits thousands of units away, where a lit pebble still
-    // covers two pixels; those are shrunk and dulled by distance in the shader instead
-    // of being drawn as brown squares.
-    const beltGeo = new THREE.IcosahedronGeometry(1, 1);
-    const beltMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, metalness: 0, flatShading: true });
+    // Detail 2 with flat shading still reads as a faceted boulder at close range, so
+    // the rocks are small and the shading is smooth; the silhouette comes from noise
+    // on the vertices instead of from flat faces.
+    const beltGeo = new THREE.IcosahedronGeometry(1, 2);
+    {
+      const pos = beltGeo.attributes.position;
+      const v = new THREE.Vector3();
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i);
+        const n = 1 + (Math.sin(v.x * 6.1 + v.y * 3.7 + v.z * 5.3) * 0.18)
+                    + (Math.sin(v.x * 13.3 - v.z * 9.1) * 0.09);
+        v.multiplyScalar(n);
+        pos.setXYZ(i, v.x, v.y, v.z);
+      }
+      beltGeo.computeVertexNormals();
+    }
+    const beltMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, metalness: 0.04, flatShading: false });
     const beltCount = coarse ? 900 : 2200;
     const belt = new THREE.InstancedMesh(beltGeo, beltMat, beltCount);
     belt.instanceMatrix.setUsage(THREE.StaticDrawUsage);
@@ -765,18 +777,19 @@
     for (let i = 0; i < beltCount; i++) {
       const a = rnd() * Math.PI * 2;
       const radius = 200 + rnd() * 95;   // between Mars (182) and Jupiter (336)
-      const y = (rnd() - 0.5) * (rnd() < 0.88 ? 7 : 19);
-      const s = 0.05 + Math.pow(rnd(), 5.0) * 0.9;
+      const y = (rnd() - 0.5) * (rnd() < 0.9 ? 6 : 15);
+      // kilometre-scale rocks: never large enough to read as a boulder at arm's length
+      const s = 0.03 + Math.pow(rnd(), 5.5) * 0.42;
       pos.set(Math.cos(a) * radius, y, Math.sin(a) * radius);
       eul.set(rnd() * 6.28, rnd() * 6.28, rnd() * 6.28);
       q.setFromEuler(eul);
-      sc.set(s, s * (0.55 + rnd() * 0.7), s * (0.55 + rnd() * 0.8));
+      sc.set(s, s * (0.7 + rnd() * 0.5), s * (0.7 + rnd() * 0.5));
       m4.compose(pos, q, sc);
       belt.setMatrixAt(i, m4);
       // darker rock, a few brighter ice shards: albedo variation is what stops
       // the belt reading as one flat brown mass. Keep it near-black — a lit pebble
       // at 200 units still covers pixels, and bright albedo turns the belt into grit.
-      const tone = 0.035 + Math.pow(rnd(), 2.4) * 0.10;
+      const tone = 0.05 + Math.pow(rnd(), 2.4) * 0.13;
       belt.setColorAt(i, new THREE.Color(tone, tone * 0.94, tone * 0.86));
     }
     belt.instanceColor.needsUpdate = true;

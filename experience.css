@@ -1,38 +1,230 @@
-/* Quiet photographic presentation. Kept separate from the prototype's legacy screens. */
-:root { --bg: #000000; --ink: #d9d7d1; --cyan: #b8c3c5; --muted: #979992; }
+/* The dying frame: everything that must feel like the last seconds of a life
+   rather than a slideshow of one. Kept apart from the legacy prototype styles.
+
+   Three layers, in order on top of the photograph:
+     .ascent-memory  the photograph itself
+     .ascent-iris    the field of view closing from the edges (opacity driven)
+     .ascent-flash   the white of death
+   All three are driven from ascent.js per frame, so the timings live in one place. */
+
+:root {
+  --bg: #000000;
+  --ink: #d9d7d1;
+  --cyan: #b8c3c5;
+  --muted: #979992;
+}
+
 body { background: #000; }
 #app { inset: 0; width: 100%; height: 100%; min-height: 0; transform: none; border: 0; border-radius: 0; box-shadow: none; }
 #grain { opacity: .025; animation: none; }
 #vignette { opacity: .55; }
+
+/* ---------- title (the first screen): order and the 'ОСТАЛОСЬ' horror treatment ----------
+   Only visual order and the word's look change here. No copy is removed or added. */
 .title-screen { background: #000 url('assets/archive-cover.jpg') center / cover; animation: none; }
-.title-screen::before { background: #000; opacity: .65; }
+.title-screen::before { background: #000; opacity: .62; }
 .title-screen::after { display: none; }
-.title-wrap { z-index: 31; width: min(680px, 100%); }
-.title-screen .scripture-mark, .title-topline, .title-bottomline { z-index: 32; }
-.title-screen .title, .title-screen .title .line, .title-screen .title .ost { filter: none; animation: none !important; transform: none; font-style: normal; text-shadow: none; }
-.title-screen .title { font-size: 60px; line-height: 1; }
-.title-screen .title .ost { font-size: 1em; color: #b8b8b0; }
-.title-description { font-style: normal; color: #aaa9a2; font-size: 16px; line-height: 24px; }
+
+/* Order: top line → scripture → eyebrow → title → description → actions → footer. */
+.title-screen .title-topline { top: max(22px, env(safe-area-inset-top)); }
+.title-screen .scripture-mark { position: relative; z-index: 32; margin: 58px 24px 0 auto; max-width: 84%; text-align: right; }
+.title-wrap { z-index: 31; width: min(640px, calc(100% - 48px)); max-width: calc(100vw - 48px); margin-top: 26px; box-sizing: border-box; }
+.title-screen .title { width: 100%; max-width: 100%; box-sizing: border-box; overflow: visible; }
+.title-screen .title .ost { display: block; font-size: 0.66em; white-space: nowrap; letter-spacing: -.03em; max-width: 100%; overflow: visible; }
+.title-screen .title .ost::before, .title-screen .title .ost::after { white-space: nowrap; }
+.title-wrap .eyebrow { margin-bottom: 14px; }
+.title-screen .title-bottomline { bottom: max(22px, env(safe-area-inset-bottom)); }
+.title-screen .start-row { margin-top: 26px; }
+
+.title-screen .title, .title-screen .title .line { font-family: Georgia, "Times New Roman", serif; font-style: normal; font-weight: 300; font-size: 40px; line-height: 1.06; color: #c9c7bf; filter: none; animation: none !important; transform: none; text-shadow: none; overflow-wrap: break-word; word-break: normal; white-space: normal; }
+.title-screen .title .line { display: block; }
+
+/* ОСТАЛОСЬ: the first-version horror. Condensed grotesque, cold grey, a red/white
+   slice that tears the word every few seconds and then sits still.
+   The size is capped so the longest word in the widest font still fits a 320px
+   screen: 0.62em of a 40px title in Impact is about 20 characters wide. */
+.title-screen .title .ost {
+  display: block; position: relative; margin-top: 6px;
+  font-family: "Arial Narrow", Impact, "Franklin Gothic Medium", sans-serif;
+  font-style: normal; font-weight: 400; font-size: 0.62em; letter-spacing: 0;
+  color: #a9b3ab; white-space: nowrap; max-width: 100%;
+  text-shadow: 0 0 14px rgba(143,209,194,.16), 1px 0 rgba(176,101,98,.5), -1px 0 rgba(230,240,232,.22);
+  animation: unease 5.9s steps(1) infinite;
+}
+.title-screen .title .ost::before, .title-screen .title .ost::after { display: block; opacity: .5; }
+.title-screen .title .ost::before { color: #b0584f; clip-path: inset(20% 0 55% 0); animation: sliceA 3.1s steps(1) infinite; }
+.title-screen .title .ost::after { color: #e8efe9; clip-path: inset(62% 0 8% 0); animation: sliceB 2.7s steps(1) infinite; }
+.title-screen .title .ost::before, .title-screen .title .ost::after { position: absolute; left: 0; top: 0; content: attr(data-t); }
+
+.title-screen .title-description { color: #9ea59e; margin-top: 22px; }
 .title-screen .title-button { padding: 16px 24px; letter-spacing: .08em; font-size: 14px; }
 .title-screen .title-button::before { filter: none; border-color: #777870; }
 .title-screen .title-button::after { display: none; }
 .quiet-control { border: 0; padding: 8px 12px; color: #aaa; font-size: 12px; letter-spacing: 0; }
-.witness { background: #000; padding: 0; isolation: isolate; }
-.witness-frame { position: absolute; inset: 0; width: 100%; min-width: 0; height: 100%; aspect-ratio: auto; z-index: -2; animation: witnessReveal 1800ms cubic-bezier(.22,1,.36,1) both; }
-.witness .pixel-memory { mask-image: none; -webkit-mask-image: none; animation: none; background: #131209; }
-.witness .pixel-memory::after { background: #000; opacity: .08; mix-blend-mode: normal; }
-.witness-frame::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(0,0,0,.12), transparent 35%, rgba(0,0,0,.18)); }
-.witness::after { content: ''; position: absolute; inset: 0; background: #000; opacity: .08; z-index: -1; pointer-events: none; }
-.memory-photo { image-rendering: auto; animation: witnessReveal 1800ms cubic-bezier(.22,1,.36,1) both, slowRecall 28s cubic-bezier(.22,1,.36,1) both; filter: saturate(.65) brightness(.95); }
+
+@media (max-width: 600px) {
+  .title-screen .title, .title-screen .title .line { font-size: 32px; }
+  .title-screen .title .ost { font-size: 0.72em; }
+  .title-screen .scripture-mark { margin-top: 64px; max-width: 92%; }
+}
+
+
+/* ---------- the memory frame ----------
+   The plate is a 16:9 photograph shown inside a tall phone frame. Cropping it to
+   fill loses most of the room, so the composition is:
+     ::before   the same plate, scaled up and blurred — fills the frame
+     img        the whole plate, centred, never cropped
+   The room stays readable and the frame has no empty bars. */
+.witness .pixel-memory.has-photo { background: #07090a center / cover no-repeat; }
+.witness .pixel-memory.has-photo::before {
+  content: '';
+  position: absolute; inset: -8%;
+  background: var(--plate) center / cover no-repeat;
+  filter: blur(30px) saturate(.85) brightness(.72);
+  transform: scale(1.12);
+  z-index: 0;
+}
+.witness {
+  background: #000;
+  padding: 0;
+  isolation: isolate;
+  /* driven by dying-frame.js: 0 at birth, 1 in the last room */
+  --dying: 0;
+  --dying-blur: 0px;
+  --dying-sat: 0.74;
+  --dying-bright: 1.02;
+}
+/* The room and the recollection blur; the scripture does not. A remembered line
+   can fade, but the one thing that was never remembered stays sharp. */
+.witness-frame, .witness-text p, .witness .witness-whisper, .witness-meta {
+  filter: blur(var(--dying-blur)) saturate(var(--dying-sat)) brightness(var(--dying-bright));
+  transition: filter 1.4s linear;
+}
+.witness-text h2 { filter: saturate(var(--dying-sat)) brightness(var(--dying-bright)); transition: filter 1.4s linear; }
+.witness-scripture, .witness-scripture span, .witness-scripture cite {
+  filter: none !important;
+  color: #e2dccd;
+  text-decoration: underline;
+  text-decoration-color: rgba(226,220,205,.34);
+  text-underline-offset: 6px;
+  text-decoration-thickness: 1px;
+}
+.witness-scripture cite { text-decoration: none; color: #a9a396; }
+.witness-frame {
+  position: absolute; inset: 0; width: 100%; min-width: 0; height: 100%;
+  aspect-ratio: auto; z-index: -2;
+  animation: witnessReveal 1800ms cubic-bezier(.22,1,.36,1) both;
+}
+.witness .pixel-memory { mask-image: none; -webkit-mask-image: none; animation: none; background: #0d0f0e; }
+.witness .pixel-memory::after { background: none; }
+/* the legacy decay layer multiplied the frame down to near-black; the dying
+   frame already does that job, and only by blur, never by crushing exposure */
+.witness.memory-decay { filter: none !important; }
+/* The global vignette is calibrated for the title plate. Over a memory it adds a
+   second, stronger falloff on top of the frame's own scrim and buries the photo. */
+#vignette { opacity: .28; }
+body:has(.witness) #vignette { opacity: .06; }
+body:has(.witness) #grain { opacity: .045; }
+.witness-frame::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  /* One soft scrim, not a blackout: the photograph is already dark, and the text
+     only needs contrast at the bottom where it sits. */
+  background: linear-gradient(180deg,
+    rgba(0,0,0,.42) 0%,
+    rgba(0,0,0,.04) 22%,
+    rgba(0,0,0,.06) 46%,
+    rgba(0,0,0,.44) 78%,
+    rgba(0,0,0,.72) 100%);
+}
+.witness::after { content: ''; position: absolute; inset: 0; background: #000; opacity: 0; z-index: -1; pointer-events: none; }
+
+/* The plate fills the frame. A 16:9 photo inside a phone screen crops at the sides,
+   which is correct here: you are looking through your own eyes at what is in front
+   of you, not at a framed picture on a wall. */
+.witness .pixel-memory.has-photo::before { display: none; }
+
+.memory-photo {
+  image-rendering: auto;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 46%;
+  z-index: 1;
+  animation: witnessReveal 1800ms cubic-bezier(.22,1,.36,1) both, photoBreath 30s cubic-bezier(.22,1,.36,1) 1.8s infinite alternate;
+  filter: saturate(.8) brightness(1.14) contrast(1.03);
+}
 .witness.memory-decay { filter: none; }
-.witness-meta { width: 100%; padding: calc(32px + env(safe-area-inset-top)) 32px 16px; margin: 0; color: #c4c1b6; font-size: 14px; }
-.witness-scripture { margin: 16px 24px; max-width: 420px; color: #c2beb2; font-size: 14px; line-height: 20px; }
-.witness-text { flex: 1; width: min(680px, 100%); justify-content: flex-end; padding: 48px 32px 24px; text-align: left; text-shadow: 0 2px 16px #000; }
-.witness-text h2 { font-size: 36px; line-height: 40px; color: #e2dfd5; }
-.witness-text p { font-size: 18px; line-height: 28px; color: #c5c1b7; }
-.witness .witness-whisper { color: #9d9a91; font-size: 14px; line-height: 20px; }
-.witness-foot { padding: 16px 32px calc(32px + env(safe-area-inset-bottom)); margin: 0; justify-content: flex-end; max-width: 680px; }
-.witness-next { font-size: 14px; line-height: 20px; letter-spacing: .08em; color: #d4d0c5; min-height: 48px; }
+
+/* The eyelid. Closed by default: the frame opens onto the memory, and between two
+   ages the screen shuts for three seconds. No button, no choice — a life passes
+   the way it is said to pass, in blinks. */
+.blink {
+  position: absolute; inset: 0; z-index: 20; pointer-events: none;
+  background: #000;
+  opacity: 1;
+}
+.blink.open {
+  animation: eyelidOpen 1500ms cubic-bezier(.22, .8, .3, 1) forwards;
+}
+.blink.shut {
+  animation: eyelidShut 3200ms cubic-bezier(.5, 0, .6, 1) forwards;
+}
+@keyframes eyelidOpen {
+  0% { opacity: 1; filter: blur(0); }
+  35% { opacity: .82; }
+  100% { opacity: 0; }
+}
+@keyframes eyelidShut {
+  0% { opacity: 0; }
+  18% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 1; }
+}
+
+.witness-meta { width: 100%; padding: calc(32px + env(safe-area-inset-top)) 32px 16px; margin: 0; color: #cfcabe; font-size: 14px; letter-spacing: .04em; text-shadow: 0 1px 10px rgba(0,0,0,.92); }
+.witness-scripture { margin: 16px 24px; max-width: 420px; color: #cfc9bd; font-size: 14px; line-height: 20px; text-shadow: 0 1px 12px rgba(0,0,0,.95), 0 0 30px rgba(0,0,0,.7); }
+.witness-text { flex: 1; width: min(680px, 100%); justify-content: flex-end; padding: 48px 32px 24px; text-align: left; text-shadow: 0 2px 18px #000, 0 0 40px rgba(0,0,0,.75); }
+.witness-text h2 { font-size: 36px; line-height: 40px; color: #f2eee4; }
+.witness-text p { font-size: 18px; line-height: 28px; color: #d5d1c6; }
+.witness .witness-whisper { color: #ada79d; font-size: 14px; line-height: 20px; font-style: italic; }
+.witness-foot { padding: 16px 32px calc(34px + env(safe-area-inset-bottom)); margin: 0; justify-content: flex-end; max-width: 680px; }
+.witness-next { font-size: 14px; line-height: 20px; letter-spacing: .08em; color: #ded9cd; min-height: 48px; }
+.witness-choice { font-size: 13px; line-height: 18px; color: #cdc7ba; border-bottom: 1px solid rgba(205,199,186,.3); text-shadow: 0 1px 10px #000; }
+.witness-choice.selected { color: #f4f0e6; border-color: rgba(244,240,230,.8); }
+.witness-or { color: #8d887d; font-size: 12px; }
+
+/* ---------- the ascent: one continuous shot ---------- */
+.ascent-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ascent-caption {
+  position: absolute; left: 32px; right: 32px;
+  bottom: calc(16% + env(safe-area-inset-bottom));
+  z-index: 3; text-align: center;
+  font: 300 17px/26px Georgia, serif; color: #cdc8bc;
+  text-shadow: 0 2px 20px #000; opacity: 0; letter-spacing: .01em;
+}
+.ascent-memory {
+  position: absolute; inset: 0; z-index: 1;
+  background: #000 center / cover no-repeat;
+  image-rendering: auto;
+  transform-origin: 50% 46%;
+}
+/* the field of view closing: a radial mask whose hole is driven by --iris */
+.ascent-iris {
+  position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 0;
+  --iris: 1;
+  background: radial-gradient(circle at 50% 46%,
+    rgba(0,0,0,0) calc(var(--iris) * 62%),
+    rgba(0,0,0,.55) calc(var(--iris) * 82%),
+    rgba(0,0,0,.96) calc(var(--iris) * 100%));
+}
+.ascent-flash { position: absolute; inset: 0; z-index: 2; background: #e6e2d8; opacity: 0; pointer-events: none; }
+.ascent-skip { position: absolute; right: 14px; top: calc(14px + env(safe-area-inset-top)); z-index: 4; width: auto; padding: 8px 16px; min-height: 44px; font-size: 12px; color: #b7bab8; background: none; border: 0; }
+.ascent-overlay { position: fixed; inset: 0; z-index: 30; }
+.ascent-overlay .ascent-flash { opacity: 1; }
+
+/* ---------- space HUD: quieter than the legacy panel ---------- */
 .hud { padding: calc(24px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom)); }
 .hud .panel { background: none; backdrop-filter: none; border: 0; padding: 0; }
 .hud .panel .eyebrow { font-size: 12px; letter-spacing: .04em; text-transform: none; color: #afb9bb !important; }
@@ -42,24 +234,32 @@ body { background: #000; }
 .keys .button { font-size: 12px; letter-spacing: 0; text-transform: none; border: 0; background: rgba(0,0,0,.15); backdrop-filter: none; color: #a3adb1; min-height: 44px; }
 .hint { bottom: 240px; width: min(400px, 85%); white-space: normal; font-size: 12px; line-height: 20px; letter-spacing: .03em; text-align: center; opacity: .8; }
 .signal-state { border: 0; text-transform: none; font-size: 14px; line-height: 20px; color: #aab3b5; }
-.ascent-skip { width: auto; padding: 8px 16px; min-height: 44px; font-size: 12px; color: #b7bab8; }
-.ascent-memory { image-rendering: auto; }
-.ascent-cosmic-plate { position: absolute; inset: 0; z-index: 1; opacity: 0; background: #02050a center / cover no-repeat; mix-blend-mode: screen; pointer-events: none; }
-.ascent-flash { background: #dedbd3; }
+
+/* ---------- archive: the last seconds, not a character select ---------- */
+.archive-kept { color: #8d8a80; }
+
+/* ---------- departure ---------- */
 .memory-stage { background: #000; }
 .memory-stage .scene { border: 0; margin: 0; }
 .memory-stage .caption h2 { color: #dedbd3 !important; }
 .memory-stage .caption p, .memory-stage .yeartag { color: #a6a59c !important; }
 .scene-scripture-dark { color: #b8b5a9; text-shadow: none; }
 .last-light { background: #131209; opacity: .35; }
+
 @keyframes witnessReveal { from { opacity: 0; } to { opacity: 1; } }
-@keyframes slowRecall { from { transform: scale(1.04); } to { transform: scale(1.13) translateX(-1%); } }
+@keyframes slowRecall { from { transform: scale(1.02); } to { transform: scale(1.12) translateX(-1%); } }
+
 @media (max-width: 600px) {
   .title-screen .title { font-size: 48px; }
   .title-wrap { padding: 0; }
   .witness-text { padding: 32px 24px 16px; }
-  .witness-text h2 { font-size: 30px; line-height: 36px; }
+  .witness-text h2 { font-size: 30px; line-height: 34px; }
   .witness-text p { font-size: 16px; line-height: 24px; }
-  .witness-meta { padding-left: 24px; padding-right: 24px; }
+  .witness-meta, .witness-scripture, .witness-foot { padding-left: 24px; padding-right: 24px; }
+  .ascent-caption { left: 24px; right: 24px; font-size: 15px; line-height: 23px; }
 }
-@media (prefers-reduced-motion: reduce) { .memory-photo, .witness-frame { animation: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .memory-photo, .witness-frame, .memory-atmosphere, .memory-keepsake { animation: none !important; }
+  .memory-atmosphere, .memory-keepsake { opacity: .22; }
+}
