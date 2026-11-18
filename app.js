@@ -88,6 +88,41 @@ const AudioLayer = {
     o.connect(g); g.connect(C.destination);
     o.start(); o.stop(C.currentTime + dur);
   },
+  // Космос слышен только тем, что рядом: у Солнца гул горячее и громче,
+  // на окраине остаётся почти неслышный ветер регистратора.
+  spaceField(state) {
+    if (!this.ctx) return;
+    if (!this.field) {
+      const C = this.ctx;
+      const out = C.createGain(); out.gain.value = 0.0; out.connect(this.master);
+      // солнечный гул: низкий дрожащий аккорд
+      const sunGain = C.createGain(); sunGain.gain.value = 0.0; sunGain.connect(out);
+      const sunFilter = C.createBiquadFilter(); sunFilter.type = "lowpass"; sunFilter.frequency.value = 240; sunFilter.Q.value = 1.2; sunFilter.connect(sunGain);
+      const sunOsc = [];
+      [36.7, 55.0, 73.4].forEach((freq, i) => {
+        const o = C.createOscillator(); o.type = i === 2 ? "triangle" : "sine"; o.frequency.value = freq;
+        const g = C.createGain(); g.gain.value = i === 2 ? 0.18 : 0.5;
+        o.connect(g); g.connect(sunFilter); o.start(); sunOsc.push(o);
+      });
+      // радиошум: узкая полоса, чуть шипит
+      const len = Math.floor(C.sampleRate * 3), buf = C.createBuffer(1, len, C.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * 0.6;
+      const noise = C.createBufferSource(); noise.buffer = buf; noise.loop = true;
+      const nBand = C.createBiquadFilter(); nBand.type = "bandpass"; nBand.frequency.value = 1400; nBand.Q.value = 0.5;
+      const nGain = C.createGain(); nGain.gain.value = 0.0; noise.connect(nBand); nBand.connect(nGain); nGain.connect(out); noise.start();
+      this.field = { out, sunGain, sunFilter, sunOsc, nGain, nBand };
+    }
+    const f = this.field;
+    const C = this.ctx, now = C.currentTime;
+    const sunHeat = state.sunHeat ?? 0;      // 0 далеко, 1 вплотную к Солнцу
+    const radio = state.radio ?? 0;          // шум у газовых гигантов
+    const speed = state.speed ?? 0;
+    f.out.gain.setTargetAtTime(0.22 + speed * 0.02, now, 0.6);
+    f.sunGain.gain.setTargetAtTime(0.02 + sunHeat * 0.85, now, 0.8);
+    f.sunFilter.frequency.setTargetAtTime(150 + sunHeat * 900, now, 0.8);
+    f.nGain.gain.setTargetAtTime(0.004 + radio * 0.05, now, 0.9);
+    f.nBand.frequency.setTargetAtTime(900 + speed * 160, now, 0.7);
+  },
   whisper() { // «голос»: тихий шумовой всплеск
     if (!this.ctx) return;
     const C = this.ctx, len = C.sampleRate * 1.4, buf = C.createBuffer(1, len, C.sampleRate), d = buf.getChannelData(0);
@@ -630,7 +665,14 @@ function spaceScreen() {
   let W = 0, H = 0, DPR = 1;
 
   // --- камера (глаза сущности): старт у Земли, взгляд на Солнце ---
-  const cam = { yaw: -2.34, pitch: -0.08, pos: { x: 82, y: 3.2, z: 106 }, vel: { x: 0, y: 0, z: 0 } };
+  // Стартовая точка сбоку от Земли со стороны Солнца: видно освещённый лимб,
+  // тонкую полосу атмосферы и Солнце в той же половине неба. Если сохранён
+  // чекпойнт из прошлой сессии — продолжаем с него.
+  // Стартовая точка: сбоку от Земли, ночная сторона с городами и лимбом на свету.
+  // Это тот кадр, в который попадает игрок, выйдя из «подъёма», поэтому он должен
+  // сразу читаться: тёмный океан, сетка огней, тонкая линия атмосферы.
+  const EARTH_START = { x: 77.58, y: 1.0, z: 93.70 };
+  const cam = { yaw: -1.471, pitch: -0.322, pos: { ...EARTH_START }, vel: { x: 0, y: 0, z: 0 } };
   if (flightCheckpoint && ['yaw', 'pitch'].every(k => Number.isFinite(flightCheckpoint[k])) && ['x', 'y', 'z'].every(k => Number.isFinite(flightCheckpoint.pos?.[k]))) {
     cam.yaw = flightCheckpoint.yaw; cam.pitch = clamp(flightCheckpoint.pitch, -1.35, 1.35);
     cam.pos = { ...flightCheckpoint.pos };
@@ -641,7 +683,8 @@ function spaceScreen() {
   addEventListener('pagehide', saveFlight);
   const FOV = 1.05; // радиан по горизонтали
   // На телефоне взгляд чувствительнее к дрожанию пальца: меньше усиление и сглаживание ниже.
-  const LOOK_GAIN = matchMedia('(pointer: coarse)').matches ? 1.1 : 2.4;
+  const coarseView = matchMedia('(pointer: coarse)').matches;
+  const LOOK_GAIN = coarseView ? 1.1 : 2.4;
 
   // --- Солнечная система: Солнце в (0,0,0), планеты на сжатых орбитах вокруг него ---
   // 1 а.е. = 120 R⊕. Игрок стартует у Земли (дистанция 120 от Солнца), видит его прямо перед собой.
@@ -689,6 +732,10 @@ function spaceScreen() {
       line: "НЕПТУН · ПОСЛЕДНЯЯ ПЛАНЕТА. ДАЛЬШЕ СИСТЕМА ПЕРЕСТАЕТ ОТВЕЧАТЬ НА ВОПРОС «ЧТО ДАЛЬШЕ»." },
   ];
   const BODIES = [SUN, EARTH, MOON, ...PLANETS];
+  // Единственное окно, которое ещё горит: координаты найдены по текстуре ночных огней.
+  const EARTH_ONE_LIGHT = [0.5059, 0.2285];
+  // Большое красное пятно: положение на текстуре Юпитера.
+  const JUPITER_GRS = [0.375, 0.613];
   // Художественно ускоренное движение: орбиты заметны в игровом времени,
   // но это не точные эфемериды и не реальная скорость планет.
   const orbiting = [EARTH, ...PLANETS].map((body, index) => ({
@@ -698,256 +745,20 @@ function spaceScreen() {
   const moonOffset = { x: MOON.x - EARTH.x, z: MOON.z - EARTH.z };
 
   // Реальные сферы WebGL; существующий canvas остаётся резервным вариантом.
+  // Сама сцена живёт в space-scene.js, здесь только её состояние и параметры мира.
   let space3d = null;
-  if (window.THREE) {
+  if (window.THREE && window.SpaceScene) {
     try {
-      const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: 'high-performance' });
-      const coarse = matchMedia('(pointer: coarse)').matches;
-      const quality = {
-        dprCap: coarse ? 1.25 : 2,
-        level: coarse ? "balanced" : "high",
-        slowFrames: 0,
-        fastFrames: 0,
-        measured: 0,
-        emaMs: 16.7,
-        starOpacity: 0.9,
-      };
-      renderer.setPixelRatio(Math.min(devicePixelRatio || 1, quality.dprCap));
-      renderer.setSize(stage.clientWidth, stage.clientHeight);
-      renderer.outputColorSpace = THREE.SRGBColorSpace;
-      renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = coarse ? 0.82 : 0.9;
-      renderer.domElement.className = 'space-webgl';
-      canvas.insertAdjacentElement('beforebegin', renderer.domElement);
-      const scene = new THREE.Scene();
-      const skyFile = 'milky-way-4k.jpg';
-      const sky = new THREE.TextureLoader().load(`assets/${skyFile}`);
-      sky.mapping = THREE.EquirectangularReflectionMapping;
-      sky.colorSpace = THREE.SRGBColorSpace;
-      sky.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-      scene.background = sky;
-      new THREE.TextureLoader().load('assets/space-art.jpg', (art) => {
-        art.mapping = THREE.EquirectangularReflectionMapping;
-        art.colorSpace = THREE.SRGBColorSpace;
-        scene.background = art;
-      }, undefined, () => {});
-      // Звёзды — отдельные точки, а не увеличенные пиксели панорамы.
-      // Фиксированная последовательность сохраняет рисунок между запусками.
-      let starSeed = 73841;
-      const starRandom = () => { starSeed = (starSeed * 1664525 + 1013904223) >>> 0; return starSeed / 4294967296; };
-      const starCount = coarse ? 3200 : 4600;
-      const starPositions = new Float32Array(starCount * 3);
-      const starColors = new Float32Array(starCount * 3);
-      const starSizes = new Float32Array(starCount);
-      for (let i = 0; i < starCount; i++) {
-         // Most stars sit in a soft galactic band; the sparse remainder keeps
-         // the poles from becoming completely empty. This reads closer to a
-         // catalogue sky than a uniformly scattered particle sphere.
-         const inBand = starRandom() < 0.74;
-         const y = inBand ? (starRandom() - 0.5) * 0.5 : starRandom() * 2 - 1;
-         const angle = starRandom() * Math.PI * 2;
-        const r = Math.sqrt(1 - y * y), radius = 1800;
-        starPositions.set([Math.cos(angle) * r * radius, y * radius, Math.sin(angle) * r * radius], i * 3);
-         const brightness = 0.12 + Math.pow(starRandom(), 4.4) * 0.88;
-        const warmth = starRandom();
-        starColors.set([brightness * (warmth < .18 ? 1 : .83), brightness * .9, brightness * (warmth < .18 ? .72 : 1)], i * 3);
-         starSizes[i] = 0.7 + Math.pow(starRandom(), 5.5) * 2.8;
-      }
-      const starGeometry = new THREE.BufferGeometry();
-      starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-      starGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
-      starGeometry.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
-      const starMaterial = new THREE.ShaderMaterial({
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-         uniforms: { uTime: { value: 0 }, uOpacity: { value: 0.9 } },
-        vertexColors: true,
-         vertexShader: `attribute float size; varying vec3 vColor; uniform float uTime; void main(){ vColor=color; vec4 mvPosition=modelViewMatrix*vec4(position,1.0); float pulse=0.985+0.015*sin(uTime*(0.08+size*.025)+position.x*.003); gl_PointSize=clamp(size*pulse*(900.0/-mvPosition.z),0.55,3.8); gl_Position=projectionMatrix*mvPosition; }`,
-         fragmentShader: `uniform float uOpacity; varying vec3 vColor; void main(){ float d=length(gl_PointCoord-vec2(.5)); float a=smoothstep(.5,.06,d); gl_FragColor=vec4(vColor,a*uOpacity); }`
+      space3d = SpaceScene.build({
+        THREE,
+        canvas,
+        stage,
+        coarse: matchMedia('(pointer: coarse)').matches,
+        BODIES, EARTH, MOON, SUN,
+        oneLight: EARTH_ONE_LIGHT,
+        grs: JUPITER_GRS,
+        catalog: window.STAR_CATALOG || null,
       });
-      const starField = new THREE.Points(starGeometry, starMaterial);
-      starField.frustumCulled = false;
-      scene.add(starField);
-
-      // Процедурные туманности: не одна размытая панорама, а несколько
-      // полупрозрачных облаков, которые медленно меняют яркость и смещаются.
-      const nebulaTexture = (hue, seed) => {
-        const c = document.createElement('canvas'); c.width = 1024; c.height = 640;
-        const x = c.getContext('2d');
-        x.clearRect(0, 0, c.width, c.height);
-        for (let i = 0; i < 22; i++) {
-          const px = ((seed * 97 + i * 173) % 1000) / 1000 * c.width;
-          const py = ((seed * 53 + i * 311) % 1000) / 1000 * c.height;
-          const rx = 55 + ((seed + i * 41) % 150), ry = 25 + ((seed + i * 23) % 90);
-          const g = x.createRadialGradient(px, py, 0, px, py, Math.max(rx, ry));
-          g.addColorStop(0, `hsla(${hue},34%,58%,${0.12 + (i % 4) * 0.025})`);
-          g.addColorStop(.38, `hsla(${hue + 14},30%,42%,${0.06 + (i % 3) * 0.018})`);
-          g.addColorStop(1, `hsla(${hue + 24},26%,24%,0)`);
-          x.save(); x.translate(px, py); x.scale(1, ry / rx); x.translate(-px, -py);
-          const m = Math.max(rx, ry);
-          x.fillStyle = g; x.fillRect(px - m, py - m, m * 2, m * 2); x.restore();
-        }
-        x.globalCompositeOperation = 'destination-in';
-        const edge = x.createRadialGradient(c.width / 2, c.height / 2, 0, c.width / 2, c.height / 2, c.height * 0.5);
-        edge.addColorStop(0, 'rgba(0,0,0,1)');
-        edge.addColorStop(0.55, 'rgba(0,0,0,0.75)');
-        edge.addColorStop(0.85, 'rgba(0,0,0,0.2)');
-        edge.addColorStop(1, 'rgba(0,0,0,0)');
-        x.fillStyle = edge; x.fillRect(0, 0, c.width, c.height);
-        x.globalCompositeOperation = 'source-over';
-        const texture = new THREE.CanvasTexture(c);
-        texture.colorSpace = THREE.SRGBColorSpace;
-        return texture;
-      };
-      const nebulaGroup = new THREE.Group();
-      const nebulaDefs = [
-         { p: [-560, 110, -720], s: [720, 420], hue: 205, opacity: .18, seed: 3 },
-         { p: [390, -120, -860], s: [620, 360], hue: 215, opacity: .12, seed: 9 },
-         { p: [-850, 310, 180], s: [540, 300], hue: 178, opacity: .09, seed: 17 },
-         { p: [720, 260, 520], s: [650, 360], hue: 32, opacity: .06, seed: 25 },
-         { p: [0, -420, -1050], s: [900, 300], hue: 210, opacity: .08, seed: 31 }
-      ];
-      const nebulaSprites = nebulaDefs.map((n, i) => {
-        const material = new THREE.SpriteMaterial({ map: nebulaTexture(n.hue, n.seed), transparent: true, depthWrite: false, depthTest: false, blending: THREE.NormalBlending, opacity: n.opacity * .72, color: 0xffffff });
-        const sprite = new THREE.Sprite(material);
-        sprite.position.set(...n.p); sprite.scale.set(n.s[0], n.s[1], 1); sprite.userData = { base: n.opacity, phase: i * 1.7 };
-        nebulaGroup.add(sprite); return sprite;
-      });
-      scene.add(nebulaGroup);
-       scene.add(new THREE.AmbientLight(0x4f6075, 0.28));
-      const station = new THREE.Group();
-      const metal = new THREE.MeshStandardMaterial({ color: 0x6b736f, roughness: .9, metalness: .2 });
-      const panelMat = new THREE.MeshStandardMaterial({ color: 0x2b3431, roughness: .8, metalness: .6 });
-      const truss = new THREE.Mesh(new THREE.BoxGeometry(9, .35, .35), metal);
-      const module = new THREE.Mesh(new THREE.CylinderGeometry(.9, .9, 2.2, 16), metal); module.rotation.z = Math.PI / 2;
-      const panels = [-3.3, 3.3].flatMap(x => [-0.85, 0.85].map(z => { const p = new THREE.Mesh(new THREE.BoxGeometry(2.6, .03, 1.3), panelMat); p.position.set(x, 0, z); return p; }));
-      station.add(truss, module, ...panels);
-      station.scale.setScalar(1.9e-6);
-      scene.add(station);
-      const glintCanvas = document.createElement('canvas'); glintCanvas.width = glintCanvas.height = 32;
-      const gx = glintCanvas.getContext('2d');
-      const glintGrad = gx.createRadialGradient(16, 16, 0, 16, 16, 16);
-      glintGrad.addColorStop(0, 'rgba(230,238,233,1)'); glintGrad.addColorStop(0.4, 'rgba(230,238,233,0.35)'); glintGrad.addColorStop(1, 'rgba(230,238,233,0)');
-      gx.fillStyle = glintGrad; gx.fillRect(0, 0, 32, 32);
-      const glint = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(glintCanvas), transparent: true, depthTest: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-      glint.scale.setScalar(0.045);
-      glint.material.opacity = 0.45;
-      scene.add(glint);
-      const light = new THREE.PointLight(0xffefce, 3, 0, 0);
-      light.position.set(0, 0, 0); scene.add(light);
-      const camera = new THREE.PerspectiveCamera(55, stage.clientWidth / stage.clientHeight, 0.03, 5000);
-      const geometry = new THREE.SphereGeometry(1, 64, 40);
-      const sunShader = { uniforms: { uTime: { value: 0 } } };
-      const makeSunMaterial = (sceneRef, surfaceTexture) => {
-  const mat = new THREE.ShaderMaterial({
-    uniforms: { ...sunShader.uniforms, uSurface: { value: surfaceTexture } },
-    vertexShader: `varying vec3 vN; varying vec3 vP; varying vec2 vUv; void main(){ vN = normalize(normalMatrix * normal); vP = position; vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-    fragmentShader: `uniform float uTime; uniform sampler2D uSurface; varying vec3 vN; varying vec3 vP; varying vec2 vUv;
-float hash(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
-float noise(vec3 p){ vec3 i = floor(p); vec3 f = fract(p); f = f * f * (3.0 - 2.0 * f);
-  return mix(mix(mix(hash(i), hash(i + vec3(1,0,0)), f.x), mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
-      mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x), mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z); }
-float fbm(vec3 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * noise(p); p *= 2.03; a *= 0.5; } return s; }
-void main(){
-  vec3 p = vP * 15.0 + vec3(0.0, 0.0, uTime * 0.16);
-  float warp = fbm(p * 0.42 + uTime * 0.05);
-  float broad = fbm(p * 0.72 + warp * 1.2);
-  float grain = fbm(p * 2.7 - uTime * 0.08);
-  float n = broad * 0.62 + grain * 0.38;
-  vec3 dark = vec3(0.55, 0.14, 0.03);
-  vec3 mid = vec3(1.0, 0.55, 0.12);
-  vec3 hot = vec3(1.0, 0.92, 0.5);
-   vec3 procedural = mix(dark, mid, smoothstep(0.3, 0.55, n));
-   procedural = mix(procedural, hot, smoothstep(0.5, 0.78, n));
-   vec3 source = texture2D(uSurface, vUv + vec2(uTime * 0.004, 0.0)).rgb;
-   vec3 col = mix(procedural, source * vec3(1.15, 0.86, 0.42), 0.64);
-  col *= 0.84 + 0.24 * smoothstep(0.25, 0.75, n);
-  float mu = clamp(vN.z, 0.0, 1.0);
-  col *= mix(0.75, 1.1, pow(mu, 0.4));
-  col += vec3(1.0, 0.85, 0.3) * smoothstep(0.7, 1.0, 1.0 - mu) * 0.5;
-  col += vec3(1.0, 0.8, 0.2) * pow(1.0 - mu, 3.0) * 0.8;
-  gl_FragColor = vec4(col, 1.0);
-}`
- });
-        const cc = document.createElement('canvas'); cc.width = cc.height = 128;
-        const cx = cc.getContext('2d');
-        const cg = cx.createRadialGradient(64, 64, 0, 64, 64, 64);
- cg.addColorStop(0.5, 'rgba(255,190,60,0.5)');
-        cg.addColorStop(0.75, 'rgba(255,120,30,0.18)');
-        cg.addColorStop(1, 'rgba(230,90,20,0)');
-        cx.fillStyle = cg; cx.fillRect(0, 0, 128, 128);
-        const corona = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cc), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-        corona.scale.setScalar(30);
-        sceneRef.add(corona);
- return mat;
-      };
-      const loader = new THREE.TextureLoader();
-      const names = { 'СОЛНЦЕ':'sun', 'ЗЕМЛЯ':'earth', 'ЛУНА':'moon', 'МЕРКУРИЙ':'mercury', 'ВЕНЕРА':'venus', 'МАРС':'mars', 'ЮПИТЕР':'jupiter', 'САТУРН':'saturn', 'УРАН':'uranus', 'НЕПТУН':'neptune' };
-      const materialSpec = {
-        'ЗЕМЛЯ': { roughness: .86, metalness: 0 },
-        'ЛУНА': { roughness: 1, metalness: 0, bump: .16 },
-        'МАРС': { roughness: .96, metalness: 0, bump: .1 },
-        'МЕРКУРИЙ': { roughness: 1, metalness: 0, bump: .08 },
-        'ВЕНЕРА': { roughness: .92, metalness: 0 },
-        'ЮПИТЕР': { roughness: .94, metalness: 0 },
-        'САТУРН': { roughness: .94, metalness: 0 },
-        'УРАН': { roughness: .9, metalness: 0 },
-        'НЕПТУН': { roughness: .9, metalness: 0 },
-      };
-      const meshes = [];
-      for (const body of BODIES) {
-        const texture = body.sun ? loader.load('assets/sun-api-candidate.jpg') : loader.load(`assets/${names[body.name]}.jpg`);
-        if (texture) {
-          texture.colorSpace = THREE.SRGBColorSpace;
-          texture.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
-          texture.generateMipmaps = true;
-          texture.minFilter = THREE.LinearMipmapLinearFilter;
-        }
-        const spec = materialSpec[body.name] || { roughness: .96, metalness: 0 };
-        const material = body.sun ? makeSunMaterial(scene, texture) : new THREE.MeshStandardMaterial({ map: texture, color: 0xc8d0ca, roughness: spec.roughness, metalness: spec.metalness, bumpMap: spec.bump ? texture : null, bumpScale: spec.bump || 0 });
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.position.set(body.x, body.y, body.z); mesh.scale.setScalar(body.r);
-        scene.add(mesh); meshes.push(mesh);
-        if (body.ring) {
-          // Кольца не одним гладким диском: реальные кольца — это пыль и лёд,
-          // собранные в сотни полос с промежутками Кассини.
-          const ringGroup = new THREE.Group();
-          const ringBands = [
-            [1.18, 1.28, .16], [1.31, 1.36, .08], [1.4, 1.48, .28],
-            [1.51, 1.57, .13], [1.61, 1.72, .34], [1.75, 1.79, .09],
-            [1.84, 1.94, .25], [1.99, 2.07, .16], [2.1, 2.2, .3]
-          ];
-          ringBands.forEach(([inner, outer, opacity], index) => {
-            const material = new THREE.MeshStandardMaterial({
-              color: index % 3 === 0 ? 0xa99f89 : index % 3 === 1 ? 0x797565 : 0xbab19a,
-              roughness: 1, metalness: 0, side: THREE.DoubleSide,
-              transparent: true, opacity, depthWrite: false
-            });
-            const band = new THREE.Mesh(new THREE.RingGeometry(body.r * inner, body.r * outer, 128), material);
-            band.rotation.x = Math.PI / 2.3;
-            ringGroup.add(band);
-          });
-          ringGroup.userData.isRings = true;
-          scene.add(ringGroup);
-          mesh.userData.orbitalRings = ringGroup;
-        }
-      }
-      const moons = [
-        { parent: 'МАРС', r: 0.12, d: 1.1, speed: 0.9 }, { parent: 'МАРС', r: 0.08, d: 1.5, speed: 0.6 },
-        { parent: 'ЮПИТЕР', r: 0.35, d: 9, speed: 0.5 }, { parent: 'ЮПИТЕР', r: 0.3, d: 11, speed: 0.4 },
- { parent: 'ЮПИТЕР', r: 0.32, d: 13, speed: 0.33 }, { parent: 'ЮПИТЕР', r: 0.25, d: 15, speed: 0.27 },
- { parent: 'САТУРН', r: 0.3, d: 8, speed: 0.45 }, { parent: 'САТУРН', r: 0.25, d: 10, speed: 0.36 }, { parent: 'САТУРН', r: 0.22, d: 12, speed: 0.3 },
-        { parent: 'УРАН', r: 0.2, d: 4, speed: 0.6 }, { parent: 'УРАН', r: 0.15, d: 5.5, speed: 0.45 },
-        { parent: 'НЕПТУН', r: 0.2, d: 3.5, speed: 0.55 },
-      ].map(m => {
- const parentMesh = meshes[BODIES.findIndex(b => b.name === m.parent)];
-         const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x747b78, roughness: 1, metalness: 0 }));
- mesh.scale.setScalar(m.r);
- scene.add(mesh);
-        return { mesh, parentMesh, d: m.d, speed: m.speed, phase: Math.random() * Math.PI * 2 };
-      });
-      space3d = { renderer, scene, camera, meshes, starField, starMaterial, nebulaGroup, nebulaSprites, quality, station, glint, sunUniforms: sunShader.uniforms, moons };
     } catch (error) { console.warn('WebGL недоступен; используется резервный рендер', error); }
   }
 
@@ -1235,14 +1046,7 @@ void main(){
   // Картинка остаётся той же по композиции, на слабых телефонах без лишней нагрузки.
   function setQuality(level) {
     if (!space3d || space3d.quality.level === level) return;
-    const q = space3d.quality;
-    q.level = level;
-    q.dprCap = level === "economy" ? 1 : level === "balanced" ? 1.25 : (matchMedia('(pointer: coarse)').matches ? 1.25 : 2);
-    space3d.renderer.setPixelRatio(Math.min(devicePixelRatio || 1, q.dprCap));
-    q.starOpacity = level === "economy" ? 0.62 : level === "balanced" ? 0.78 : 0.9;
-    space3d.nebulaSprites?.forEach((sprite) => {
-      sprite.material.opacity = sprite.userData.base * (level === "economy" ? 0.55 : level === "balanced" ? 0.72 : 1);
-    });
+    space3d.setQuality(level);
   }
   function adaptQuality(dt) {
     const q = space3d.quality;
@@ -1336,49 +1140,30 @@ void main(){
     }
 
     if (space3d) {
-      const { renderer, scene, camera, meshes, starField, starMaterial, nebulaGroup, nebulaSprites, station, glint } = space3d;
-      const stationAngle = state.t * 0.25;
-      station.position.set(EARTH.x + Math.cos(stationAngle) * 1.25, EARTH.y + 0.15, EARTH.z + Math.sin(stationAngle) * 1.25);
-      station.rotation.y = -stationAngle;
-      glint.position.copy(station.position);
-      if (camera.aspect !== W / H) { camera.aspect = W / H; camera.updateProjectionMatrix(); renderer.setSize(W, H); }
-      camera.position.set(cam.pos.x, cam.pos.y, cam.pos.z);
-      starField.position.copy(camera.position);
-      starField.rotation.y = state.t * 0.00018;
-      starMaterial.uniforms.uTime.value = state.t;
-      // Едва заметное изменение плотности звёзд заменяет постоянные маркеры.
-       const zoneDistance = Math.hypot(cam.pos.x - EARTH.x, cam.pos.y - EARTH.y, cam.pos.z - EARTH.z) - EARTH.r;
-       const deep = clamp((zoneDistance - 12) / 58, 0, 1);
-       starMaterial.uniforms.uOpacity.value = space3d.quality.starOpacity * (0.88 + deep * .12) * (0.94 + Math.sin(state.t * 0.035) * 0.06);
-      space3d.sunUniforms.uTime.value = state.t;
-      space3d.moons.forEach(m => {
-        const a = m.phase + state.t * m.speed;
-        m.mesh.position.set(m.parentMesh.position.x + Math.cos(a) * m.d * 0.18, m.parentMesh.position.y, m.parentMesh.position.z + Math.sin(a) * m.d * 0.18);
+      const camera = space3d.camera;
+      if (camera.aspect !== W / H) { camera.aspect = W / H; camera.updateProjectionMatrix(); space3d.renderer.setSize(W, H); space3d.resize(); }
+      const vNow = Math.hypot(cam.vel.x, cam.vel.y, cam.vel.z);
+      // сколько Солнца в кадре: по этому значению гаснут звёзды и закрывается диафрагма
+      const toSun = { x: -cam.pos.x, y: -cam.pos.y, z: -cam.pos.z };
+      const sunLen = Math.hypot(toSun.x, toSun.y, toSun.z) || 1;
+      const sunAlign = dot({ x: toSun.x / sunLen, y: toSun.y / sunLen, z: toSun.z / sunLen }, B.f);
+      const sunOnScreen = clamp((sunAlign - 0.70) / 0.26, 0, 1);
+      // инерция взгляда: камера чуть отстаёт и качается тем сильнее, чем быстрее полёт
+      const shake = reducedMotion ? 0 : Math.min(1, vNow / 9);
+      const jitterY = Math.sin(state.t * 7.3) * 0.0016 * shake + Math.sin(state.t * 2.1) * 0.0009 * shake;
+      const jitterP = Math.cos(state.t * 6.1) * 0.0013 * shake;
+      space3d.update({
+        t: state.t, dt, cam, B,
+        speed: vNow,
+        sunOnScreen,
+        fov: (coarseView ? 62 : 55) + Math.min(9, vNow * 0.85),
+        jitterY, jitterP,
+        MOON, EARTH, SUN,
       });
-      nebulaGroup.rotation.y = state.t * 0.00008;
-      nebulaSprites.forEach(sprite => {
-         sprite.material.opacity = sprite.userData.base * (space3d.quality.level === 'economy' ? .55 : .72) * (.72 + deep * .28) * (0.82 + 0.18 * Math.sin(state.t * 0.16 + sprite.userData.phase));
-      });
-      camera.lookAt(cam.pos.x + B.f.x, cam.pos.y + B.f.y, cam.pos.z + B.f.z);
-      meshes.forEach((mesh, i) => {
-        const body = BODIES[i];
-        mesh.position.set(body.x, body.y, body.z);
-        mesh.rotation.y = state.t * (i === 0 ? 0.015 : 0.006);
-        if (mesh.userData.orbitalRings) mesh.userData.orbitalRings.position.copy(mesh.position);
-      });
-      renderer.render(scene, camera);
     }
 
-    // поле обломков: 3D-точки в мировых координатах (настоящий параллакс)
-    worldPts(B, DEBRIS, (o, pr, fo) => {
-      const d = pr.depth;
-      if (d < 0.4) return;
-      const sz = Math.max(1, (o.s / d) * fo);
-      ctx.globalAlpha = clamp(1.2 / d, 0.06, 0.6);
-      ctx.fillStyle = "rgba(120,135,132,0.9)";
-      ctx.fillRect(pr.x - sz / 2, pr.y - sz / 2, sz, sz);
-    });
-    ctx.globalAlpha = 1;
+    // пыль и обломки теперь в самой 3D-сцене (dust + пояс астероидов),
+    // поэтому 2D-квадратов поверх кадра больше нет
 
     // HUD-дистанции
     const dE = Math.hypot(cam.pos.x - EARTH.x, cam.pos.y - EARTH.y, cam.pos.z - EARTH.z) - EARTH.r;
@@ -1388,6 +1173,13 @@ void main(){
     setHud("#d-earth", dE.toFixed(1) + " R");
     setHud("#d-sun", dS.toFixed(1) + " R");
     setHud("#v-now", v.toFixed(1));
+    // звук привязан к расстоянию: у Солнца гул, у гигантов радиошум, на окраине тишина
+    const dJup = Math.hypot(cam.pos.x - PLANETS[4].x, cam.pos.y - PLANETS[4].y, cam.pos.z - PLANETS[4].z) - PLANETS[4].r;
+    AudioLayer.spaceField && AudioLayer.started && AudioLayer.spaceField({
+      sunHeat: clamp(1 - (dS - 6) / 90, 0, 1),
+      radio: clamp(1 - (dJup - 8) / 60, 0, 1) * 0.7,
+      speed: v,
+    });
     const nearEl = $("#d-near");
     if (nearEl) nearEl.textContent = `${nearest.name} · ${nearest.d.toFixed(1)} R`;
 

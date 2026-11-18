@@ -3,7 +3,9 @@
    2. out of the white: low over the real Earth at the terminator, city side in shadow
    3. slow rise: the curve of the horizon, thin atmosphere, sunrise along the limb
    4. the planet recedes until it is small among the Milky Way
-   Text appears only in pauses. Falls back to a short fade without WebGL. */
+   Text appears only in pauses. Falls back to a short fade without WebGL.
+   The Earth here uses the same materials as the space scene: one light,
+   real clouds, city lights, the window that is still on. */
 function playAscent(host, person, onDone, onPrepare) {
   const female = person?.gender === 'f';
   const caption = document.createElement('div');
@@ -30,10 +32,6 @@ function playAscent(host, person, onDone, onPrepare) {
   const url = typeof memoryImageUrl === 'function' ? memoryImageUrl(person, last) : '';
   if (url) memLayer.style.backgroundImage = `url("${url}")`;
   if (typeof composedMemoryUrl === 'function') composedMemoryUrl(person, last).then(src => { if (src && !done) memLayer.style.backgroundImage = `url("${src}")`; });
-  const cosmicPlate = document.createElement('div');
-  cosmicPlate.className = 'ascent-cosmic-plate';
-  cosmicPlate.style.backgroundImage = "url('assets/space-finale.jpg')";
-
   try {
     renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   } catch (e) { setTimeout(finish, 600); return finish; }
@@ -42,11 +40,11 @@ function playAscent(host, person, onDone, onPrepare) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
   renderer.domElement.className = 'ascent-canvas';
-  host.append(renderer.domElement, memLayer, cosmicPlate, flash, caption);
+  host.append(renderer.domElement, memLayer, flash, caption);
   cleanup.push(() => renderer.dispose());
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(50, 1, 0.001, 200);
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.001, 2600);
   function resize() {
     const w = host.clientWidth, h = host.clientHeight;
     renderer.setSize(w, h, false);
@@ -61,77 +59,93 @@ function playAscent(host, person, onDone, onPrepare) {
   const loader = new THREE.TextureLoader();
   const tex = (src) => { const t = loader.load(src); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
 
-  // Milky Way background
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(100, 48, 32),
-    new THREE.MeshBasicMaterial({ map: tex('assets/milky-way-4k.jpg'), side: THREE.BackSide, color: 0xd8dce4 }));
-  sky.rotation.set(0.5, 0.3, 0.9);
+  // Milky Way background — the real mosaic, tilted like the space scene
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(1400, 48, 32),
+    new THREE.MeshBasicMaterial({ map: tex('assets/milky-way-real-4k.jpg'), side: THREE.BackSide, color: 0xffffff }));
+  sky.rotation.set(0.42, 0.9, -0.62);
   scene.add(sky);
 
-  // Earth: day texture lit by the sun; night side keeps a faint warm glow of cities.
-  const sunDir = new THREE.Vector3(1, 0.15, -0.35).normalize();
-  const earthMat = new THREE.ShaderMaterial({
-    uniforms: { day: { value: tex('assets/earth.jpg') }, sun: { value: sunDir } },
+  // real catalogue stars over the plate
+  const starMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, vertexColors: true,
+    uniforms: { uTime: { value: 0 }, uOpacity: { value: 1.0 } },
     vertexShader: `
-      varying vec2 vUv; varying vec3 vN; varying vec3 vView;
-      void main(){ vUv = uv; vN = normalize(mat3(modelMatrix) * normal);
-        vec4 wp = modelMatrix * vec4(position,1.0); vView = normalize(cameraPosition - wp.xyz);
-        gl_Position = projectionMatrix * viewMatrix * wp; }`,
-    fragmentShader: `
-      uniform sampler2D day; uniform vec3 sun; varying vec2 vUv; varying vec3 vN; varying vec3 vView;
-      float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
+      attribute float size; varying vec3 vColor; uniform float uTime;
       void main(){
-        vec3 c = texture2D(day, vUv).rgb;
-        float l = dot(vN, sun);
-        float dayK = smoothstep(-0.08, 0.25, l);
-        vec3 lit = c * (0.08 + 1.15 * max(l, 0.0));
-        // cities: land pixels (not blue, not white) on the night side
-        float land = step(c.b, c.r * 1.05) * step(c.r, 0.75);
-        vec2 q = vUv * vec2(6000.0, 3000.0); vec2 g = floor(q); vec2 fq = fract(q) - 0.5;
-        float dot1 = smoothstep(0.22, 0.0, length(fq));
-        float cluster = smoothstep(0.55, 0.9, h(floor(vUv * vec2(180.0, 90.0))));
-        float city = step(0.93 - cluster * 0.25, h(g)) * dot1 * land * (1.0 - smoothstep(0.6, 0.8, abs(vUv.y - 0.5) * 2.0));
-        vec3 night = c * 0.015 + vec3(1.0, 0.72, 0.38) * city * 1.4;
-        vec3 col = mix(night, lit, dayK);
-        // warm terminator band
-        col += vec3(0.9, 0.4, 0.15) * 0.04 * exp(-pow(l * 9.0, 2.0));
-        // atmosphere haze toward the limb
-        float rim = pow(1.0 - max(dot(vN, vView), 0.0), 3.0);
-        col += vec3(0.35, 0.55, 1.0) * rim * (0.15 + 0.85 * smoothstep(-0.2, 0.4, l));
-        gl_FragColor = vec4(col, 1.0);
+        vColor = color; vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        float tw = 0.88 + 0.12 * sin(uTime * (0.7 + size) + position.x * 0.02);
+        gl_PointSize = clamp(size * tw * (900.0 / max(-mv.z, 1.0)), 0.6, 4.4);
+        gl_Position = projectionMatrix * mv;
       }`,
+    fragmentShader: `
+      uniform float uOpacity; varying vec3 vColor;
+      void main(){ float d = length(gl_PointCoord - vec2(0.5)); float a = smoothstep(0.5, 0.04, d); gl_FragColor = vec4(vColor, a * uOpacity); }`,
   });
+  const catalog = window.STAR_CATALOG;
+  if (catalog && catalog.length > 40 && window.SpaceScene) {
+    const count = Math.floor(catalog.length / 4);
+    const pos = new Float32Array(count * 3), col = new Float32Array(count * 3), siz = new Float32Array(count);
+    for (let i = 0; i < count; i++) {
+      const l = catalog[i * 4] * Math.PI / 180, b = catalog[i * 4 + 1] * Math.PI / 180;
+      const mag = catalog[i * 4 + 2], bv = catalog[i * 4 + 3];
+      const cb = Math.cos(b);
+      pos[i * 3] = cb * Math.cos(l) * 1200; pos[i * 3 + 1] = -Math.sin(b) * 1200; pos[i * 3 + 2] = cb * Math.sin(l) * 1200;
+      const rgb = SpaceScene.bvToRgb(Math.max(-0.4, Math.min(2.0, bv)));
+      const vis = Math.max(0.16, Math.min(1.35, Math.pow(10, -0.16 * (mag - 0.4))));
+      col[i * 3] = rgb[0] * vis; col[i * 3 + 1] = rgb[1] * vis; col[i * 3 + 2] = rgb[2] * vis;
+      siz[i] = Math.max(0.55, Math.min(3.1, 2.15 - mag * 0.28));
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    geo.setAttribute('size', new THREE.BufferAttribute(siz, 1));
+    const stars = new THREE.Points(geo, starMat);
+    stars.rotation.copy(sky.rotation);
+    stars.frustumCulled = false;
+    scene.add(stars);
+  }
+
+  // Earth: same shader as the space scene — day, night lights, the lit window, clouds, glint
+  const sunDir = new THREE.Vector3(1, 0.15, -0.35).normalize();
+  const earthTex = { day: tex('assets/earth.jpg'), night: tex('assets/earth-night.jpg'), clouds: tex('assets/earth-clouds.jpg') };
+  const earthMat = window.SpaceScene
+    ? SpaceScene.earthMaterial(THREE, earthTex, { oneLight: [0.5059, 0.2285] })
+    : new THREE.MeshBasicMaterial({ map: earthTex.day });
+  if (earthMat.uniforms?.uSunPos) earthMat.uniforms.uSunPos.value.copy(sunDir).multiplyScalar(50);
   const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 128, 96), earthMat);
   earth.rotation.y = -1.9 + ((person?.id || 0) % 7) * 0.12;
   earth.rotation.x = 0.35;
   scene.add(earth);
 
-  // Atmosphere shell: scattering glow, bright only on the sun side.
-  const atmo = new THREE.Mesh(new THREE.SphereGeometry(1.025, 96, 64), new THREE.ShaderMaterial({
-    uniforms: { sun: { value: sunDir } },
-    vertexShader: `varying vec3 vN; varying vec3 vView;
-      void main(){ vN = normalize(mat3(modelMatrix) * normal); vec4 wp = modelMatrix * vec4(position,1.0);
-        vView = normalize(cameraPosition - wp.xyz); gl_Position = projectionMatrix * viewMatrix * wp; }`,
-    fragmentShader: `uniform vec3 sun; varying vec3 vN; varying vec3 vView;
-      void main(){
-        float rim = pow(1.0 - abs(dot(vN, vView)), 4.0);
-        float lit = smoothstep(-0.35, 0.5, dot(vN, sun));
-        vec3 col = mix(vec3(1.0, 0.45, 0.2), vec3(0.35, 0.6, 1.0), smoothstep(-0.1, 0.4, dot(vN, sun)));
-        gl_FragColor = vec4(col * rim * (0.2 + 1.6 * lit), rim * (0.15 + 0.85 * lit));
-      }`,
-    side: THREE.BackSide, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
-  }));
+  const clouds = new THREE.Mesh(new THREE.SphereGeometry(1.004, 96, 64),
+    new THREE.MeshStandardMaterial({ map: earthTex.clouds, transparent: true, opacity: 0.6, depthWrite: false, roughness: 1, metalness: 0, color: 0xdfe6e8 }));
+  clouds.rotation.copy(earth.rotation);
+  scene.add(clouds);
+
+  // Atmosphere shell: Rayleigh-ish limb, bright only on the sun side
+  const atmoMat = window.SpaceScene
+    ? SpaceScene.atmosphereMaterial(THREE, { colors: [[0.28, 0.55, 1.0], [1.0, 0.42, 0.18]], density: 1.0, power: 4.2, thickness: 1.0 })
+    : new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 });
+  atmoMat.uniforms?.uSunDir?.value.copy(sunDir);
+  const atmo = new THREE.Mesh(new THREE.SphereGeometry(1.028, 96, 64), atmoMat);
   scene.add(atmo);
 
-  // Sun: a soft sprite low on the horizon.
+  // Sun: a soft sprite low on the horizon, with the granulated disc behind it
   const sunCanvas = document.createElement('canvas'); sunCanvas.width = sunCanvas.height = 256;
   const sg = sunCanvas.getContext('2d'), grd = sg.createRadialGradient(128, 128, 0, 128, 128, 128);
   grd.addColorStop(0, 'rgba(255,250,235,1)'); grd.addColorStop(0.06, 'rgba(255,236,200,.9)');
   grd.addColorStop(0.2, 'rgba(255,190,120,.25)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
   sg.fillStyle = grd; sg.fillRect(0, 0, 256, 256);
   const sunSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(sunCanvas), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
-  sunSprite.position.copy(sunDir).multiplyScalar(60);
-  sunSprite.scale.setScalar(14);
+  sunSprite.position.copy(sunDir).multiplyScalar(120);
+  sunSprite.scale.setScalar(16);
   scene.add(sunSprite);
+
+  const sunLight = new THREE.PointLight(0xffefd8, 3.2, 0, 0);
+  sunLight.position.copy(sunDir).multiplyScalar(60);
+  scene.add(sunLight);
+  scene.add(new THREE.AmbientLight(0x2c3a4a, 0.16));
+
   cleanup.push(() => {
     scene.traverse((object) => {
       object.geometry?.dispose();
@@ -158,21 +172,21 @@ function playAscent(host, person, onDone, onPrepare) {
     [15200, 19600, female ? 'всё, что ты любила, — под этой тонкой полосой.' : 'всё, что ты любил, — под этой тонкой полосой.'],
     [22400, 26600, 'вот она. вся.'],
   ];
-  const TOTAL = 22000;
+  const TOTAL = 28500;
   const t0 = performance.now();
   const camPos = new THREE.Vector3(), look = new THREE.Vector3();
+  let lastSpeed = 0;
 
   function frame(now) {
     if (!host.isConnected) { finish(); return; }
     const elapsed = now - t0;
-    const t = elapsed * 28500 / TOTAL;
+    const t = elapsed;
 
     // 1: memory overexposes, white holds, then opens onto the Earth
     const over = seg(t, 400, 3800);
     memLayer.style.opacity = String(1 - seg(t, 3600, 4600));
     memLayer.style.filter = `brightness(${1 + over * 3}) blur(${over * 6}px) saturate(${1 - over})`;
     memLayer.style.transform = `scale(${1 + over * 0.08})`;
-    cosmicPlate.style.opacity = String(seg(t, 15500, 22000));
     flash.style.opacity = String(1 - seg(t, 1200, 7000));
     if (t > 4600) memLayer.style.display = 'none';
 
@@ -188,9 +202,18 @@ function playAscent(host, person, onDone, onPrepare) {
     look.lerpVectors(horizon, new THREE.Vector3(0, 0, 0), seg(t, 12000, 24000));
     camera.up.set(0, 1, 0);
     camera.lookAt(look);
-    earth.rotation.y += 0.00004;
 
-    renderer.toneMappingExposure = .9;
+    // the whole shot breathes: tiny hand-held drift, widening with speed
+    const speed = Math.abs(alt - lastSpeed); lastSpeed = alt;
+    const breathe = 0.0016 + Math.min(0.004, speed * 0.6);
+    camera.rotateY(Math.sin(t * 0.0007) * breathe);
+    camera.rotateX(Math.cos(t * 0.0009) * breathe * 0.7);
+
+    earth.rotation.y += 0.00004;
+    clouds.rotation.y += 0.00006;
+    starMat.uniforms.uTime.value = t * 0.001;
+
+    renderer.toneMappingExposure = 0.92;
     renderer.render(scene, camera);
 
     let text = '', ca = 0;

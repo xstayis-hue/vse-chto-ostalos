@@ -1,0 +1,107 @@
+﻿<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>space lab</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  canvas#space { display: none; }
+  #stage { position: fixed; inset: 0; }
+  #hud { position: fixed; left: 12px; top: 12px; z-index: 5; font: 11px ui-monospace, monospace; color: #8fa3a0; display: flex; gap: 6px; flex-wrap: wrap; max-width: 92vw; }
+  #hud button { font: inherit; color: #cfd8d4; background: rgba(20,28,30,.72); border: 1px solid rgba(140,170,160,.28); padding: 6px 9px; cursor: pointer; }
+  #hud button.on { border-color: #8fd1c2; color: #eaf6f1; }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="space"></canvas></div>
+<div id="hud"></div>
+<script src="assets/three.min.js"></script>
+<script src="assets/star-catalog.js"></script>
+<script src="space-scene.js"></script>
+<script>
+const AU = 120;
+const ORB = (a, ang) => ({ x: Math.cos(ang) * a * AU, z: Math.sin(ang) * a * AU });
+const SUN = { name: "СОЛНЦЕ", x: 0, y: 0, z: 0, r: 12, sun: true };
+const EARTH = { name: "ЗЕМЛЯ", ...ORB(1, 0.9), y: 0, r: 1 };
+const MOON = { name: "ЛУНА", x: EARTH.x + 1.2, y: 0.6, z: EARTH.z - 3.2, r: 0.273 };
+const PLANETS = [
+  { name: "МЕРКУРИЙ", ...ORB(0.39, 2.4), y: -0.8, r: 0.38 },
+  { name: "ВЕНЕРА", ...ORB(0.72, 4.4), y: 0.9, r: 0.95 },
+  { name: "МАРС", ...ORB(1.52, 0.2), y: 1.2, r: 0.53 },
+  { name: "ЮПИТЕР", ...ORB(2.8, 3.1), y: 3.5, r: 5.5 },
+  { name: "САТУРН", ...ORB(4.2, 5.3), y: -2.8, r: 4.6, ring: true },
+  { name: "УРАН", ...ORB(5.8, 1.7), y: 4.2, r: 2 },
+  { name: "НЕПТУН", ...ORB(7.2, 3.9), y: -3.5, r: 1.9 },
+];
+const BODIES = [SUN, EARTH, MOON, ...PLANETS];
+const stage = document.getElementById('stage');
+const canvas = document.getElementById('space');
+const coarse = matchMedia('(pointer: coarse)').matches;
+
+const scene3d = SpaceScene.build({
+  THREE, canvas, stage, coarse, BODIES, EARTH, MOON, SUN,
+  oneLight: [0.5059, 0.2285], grs: [0.375, 0.613],
+  catalog: window.STAR_CATALOG || null,
+});
+
+function look(yaw, pitch) {
+  const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+  return { f: { x: sy * cp, y: sp, z: cy * cp }, r: { x: cy, y: 0, z: -sy }, u: { x: -sy * sp, y: cp, z: -cy * sp } };
+}
+
+function sunward(body, dist) {
+  const n = Math.hypot(body.x, body.z) || 1;
+  return { x: body.x - (body.x / n) * dist, y: body.y, z: body.z - (body.z / n) * dist };
+}
+function side(body, dist, angle = 1.4) {
+  const n = Math.hypot(body.x, body.z) || 1;
+  const ux = -body.z / n, uz = body.x / n;
+  const sx = -body.x / n, sz = -body.z / n;
+  return {
+    x: body.x + (sx * Math.cos(angle) + ux * Math.sin(angle)) * dist,
+    y: body.y + dist * 0.25,
+    z: body.z + (sz * Math.cos(angle) + uz * Math.sin(angle)) * dist,
+  };
+}
+
+const views = {
+  'A: анти-солнце': { pos: { x: EARTH.x + (EARTH.x / 120) * 3.0, y: 1.0, z: EARTH.z + (EARTH.z / 120) * 3.0 }, look: EARTH },
+  'B: сбоку 60°': { pos: (() => { const n = 120; const dx = EARTH.x / n, dz = EARTH.z / n; const t = 1.0; return { x: EARTH.x + (dx * Math.cos(t) + dz * Math.sin(t)) * 3.0, y: 1.0, z: EARTH.z + (dz * Math.cos(t) - dx * Math.sin(t)) * 3.0 }; })(), look: EARTH },
+  'app-start': { pos: { x: 74.21, y: 0.9, z: 90.62 }, look: { x: 74.59, y: 0.2, z: 94.0 } },
+  'Земля день': { pos: side(EARTH, 2.6, 0.9), look: EARTH },
+  'Земля лимб': { pos: side(EARTH, 1.55, 2.1), look: EARTH },
+  'Земля+Луна': { pos: side(EARTH, 6.5, 1.2), look: { x: (EARTH.x + MOON.x) / 2, y: EARTH.y, z: (EARTH.z + MOON.z) / 2 } },
+  'Земля ночь': { pos: { x: EARTH.x + (EARTH.x / 120) * 2.4, y: 0.7, z: EARTH.z + (EARTH.z / 120) * 2.4 }, look: EARTH },
+  'Солнце': { pos: { x: 40, y: 6, z: 52 }, look: SUN },
+  'Сатурн': { pos: side(PLANETS[4], 15, 1.1), look: PLANETS[4] },
+  'Сатурн сзади': { pos: sunward(PLANETS[4], -16), look: PLANETS[4] },
+  'Юпитер': { pos: side(PLANETS[3], 14, 0.8), look: PLANETS[3] },
+  'Марс': { pos: side(PLANETS[2], 1.8, 1.0), look: PLANETS[2] },
+  'Венера': { pos: side(PLANETS[1], 2.6, 1.0), look: PLANETS[1] },
+  'пояс': { pos: { x: 248, y: 3, z: 22 }, look: { x: 262, y: 0, z: 60 } },
+  'глубина': { pos: { x: 620, y: 90, z: 300 }, look: SUN },
+};
+let current = 'app-start';
+const hud = document.getElementById('hud');
+for (const name of Object.keys(views)) {
+  const b = document.createElement('button');
+  b.textContent = name; b.onclick = () => { current = name; [...hud.children].forEach(c => c.classList.toggle('on', c === b)); };
+  hud.appendChild(b);
+}
+hud.children[0].classList.add('on');
+
+let t = 0, last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt;
+  const v = views[current];
+  const dx = v.look.x - v.pos.x, dy = v.look.y - v.pos.y, dz = v.look.z - v.pos.z;
+  const yaw = Math.atan2(dx, dz), pitch = Math.atan2(dy, Math.hypot(dx, dz));
+  scene3d.update({ t, dt, cam: { pos: v.pos }, B: look(yaw, pitch), speed: 0, sunOnScreen: 0, fov: 55, MOON, EARTH, SUN });
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+addEventListener('resize', () => scene3d.resize());
+</script>
+</body>
+</html>
