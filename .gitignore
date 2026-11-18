@@ -2,3 +2,7 @@ node_modules/
 .wrangler/
 *.log
 .DS_Store
+_lives.txt
+assets/_probe-*.jpg
+tools/_*.cjs
+tools/_*.mjs
