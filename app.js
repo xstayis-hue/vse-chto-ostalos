@@ -441,7 +441,7 @@ async function titleScreen() {
   AudioLayer.fade(0.0001, 0.1);
   const saved = readSavedRun();
   const resumeLabel = saved ? (saved.phase === 'space' ? 'Вернуться в тишину' : 'Вспомнить дальше') : '';
-  const firstScripture = SCRIPTURES[0];
+  const firstScripture = SCRIPTURE_TITLE;
   render(`
     <div class="screen title-screen">
       <div class="title-topline"><span>Жизнь · память · тишина</span><button class="quiet-control" data-sound aria-pressed="false">Звук включён</button></div>
@@ -488,13 +488,13 @@ async function chooseScreen() {
     </div>`);
 }
 
-/* Каждая жизнь начинается со своей цитаты; весь набор цитат проекта сохранён. */
-const SCRIPTURES = [
-  ['«Я свет миру; кто последует за Мною, тот не будет ходить во тьме.»', 'Ин. 8:12'],
-  ['«Что Я делаю, теперь ты не знаешь, а уразумеешь после.»', 'Ин. 13:7'],
-  ['«Свет ещё на малое время есть с вами; ходите, пока есть свет, чтобы не объяла вас тьма.»', 'Ин. 12:35'],
-  ['«Род проходит, и род приходит, а земля пребывает во веки.»', 'Еккл. 1:4'],
-];
+/* Цитаты фиксированы и одинаковы в каждой жизни — так было задумано с первой
+   версии. Это не атрибут биографии, а рамка всего опыта: три строки о свете,
+   которые не меняются от того, кто именно умирает. */
+const SCRIPTURE_TITLE = ['«Что Я делаю, теперь ты не знаешь, а уразумеешь после.»', 'Ин. 13:7'];
+const SCRIPTURE_MEMORY = ['«Я свет миру; кто последует за Мною, тот не будет ходить во тьме.»', 'Ин. 8:12'];
+const SCRIPTURE_DEATH = ['«Свет ещё на малое время есть с вами; ходите, пока есть свет, чтобы не объяла вас тьма.»', 'Ин. 12:35'];
+const SCRIPTURES = [SCRIPTURE_MEMORY, SCRIPTURE_TITLE, SCRIPTURE_DEATH];
 
 /* Один кадр воспоминания — и он же переход к следующему.
 
@@ -516,7 +516,9 @@ async function memoryScreen(idx) {
   const ageNow = typeof m.y === 'number' ? m.y - LIFE.year : null;
   const ageWord = ageNow == null ? '' : ageNow === 0 ? 'первый день' : `${ageNow} ${plural(ageNow, "год", "года", "лет")}`;
   const progress = idx / Math.max(1, total - 1);
-  const scripture = LIFE.scripture || SCRIPTURES[(LIFE.id || 1) % SCRIPTURES.length];
+  // The scripture is the same in every life: only the light lines, never a quote
+  // that belongs to one biography.
+  const scripture = SCRIPTURE_MEMORY;
   render(`
     <div class="witness memory-decay" style="--decay:${progress.toFixed(2)}">
       <div class="witness-frame">
@@ -644,7 +646,7 @@ async function deathScreen() {
     <div class="memory-stage">
       <div class="scene">
         <div class="fx last-light"></div>
-        <blockquote class="scene-scripture scene-scripture-dark"><span>${(LIFE.scripture || SCRIPTURES[2])[0]}</span><cite>${(LIFE.scripture || SCRIPTURES[2])[1]}</cite></blockquote>
+        <blockquote class="scene-scripture scene-scripture-dark"><span>${SCRIPTURE_DEATH[0]}</span><cite>${SCRIPTURE_DEATH[1]}</cite></blockquote>
         <div class="caption" style="color:#1a221f">
           <div class="yeartag" style="color:#3c4a45">СЕРДЦЕБИЕНИЕ: НЕ ОБНАРУЖЕНО</div>
           <h2 class="serif" id="death-h"></h2>
@@ -1536,29 +1538,35 @@ document.addEventListener("click", (e) => {
   }
   const choice = e.target.closest('[data-life]');
   if (choice) { LIFE = lifePool.find((life) => String(life.id) === choice.dataset.life) || lifePool[0]; persistRun(); chooseScreen(); return; }
-  const go = e.target.closest("[data-go]")?.dataset.go;
-  if (!go) return;
+});
+/* Единая навигация. Раньше переходы жили только внутри обработчика клика, а
+   этапы вызывали go('next') — функции не существовало, и жизнь замирала на
+   первом кадре с закрытыми веками. Теперь это одна функция, и кнопки, и
+   автоматическая смена этапов идут через неё. */
+function go(screen, opts = {}) {
   AudioLayer.ensure();
-  Haptics.selection();
-  if (go === "title") titleScreen();
-  if (go === "resume") restoreRun();
-  if (go === 'begin') {
-    if (hasActiveRun() && !confirm('Начать другую жизнь? Текущее воспоминание будет заменено.')) return;
+  if (!opts.silent) Haptics.selection();
+  if (screen === 'title') titleScreen();
+  else if (screen === 'resume') restoreRun();
+  else if (screen === 'begin') {
+    if (!opts.force && hasActiveRun() && !confirm('Начать другую жизнь? Текущее воспоминание будет заменено.')) return;
     pickLives(); memoryScreen(0);
-  }
-  if (go === "choose") {
-    if (hasActiveRun() && !confirm("Незавершённая запись будет заменена новой. Продолжить?")) return;
+  } else if (screen === 'choose') {
+    if (!opts.force && hasActiveRun() && !confirm('Незавершённая запись будет заменена новой. Продолжить?')) return;
     pickLives(); chooseScreen();
-  }
-  if (go === "reroll") {
-    if (hasActiveRun() && !confirm("Незавершённая запись будет заменена новой пятёркой. Продолжить?")) return;
+  } else if (screen === 'reroll') {
+    if (!opts.force && hasActiveRun() && !confirm('Незавершённая запись будет заменена новой пятёркой. Продолжить?')) return;
     pickLives(); chooseScreen();
-  }
-  if (go === "mem") { memIdx = 0; persistRun(); memoryScreen(0); }
-  if (go === "next") { memIdx++; persistRun(); memoryScreen(memIdx); }
-  if (go === "death") deathScreen();
-  if (go === "space") transitionToSpace();
-  if (go === "restart") { pickLives(); chooseScreen(); }
+  } else if (screen === 'mem') { memIdx = 0; persistRun(); memoryScreen(0); }
+  else if (screen === 'next') { memIdx++; persistRun(); memoryScreen(memIdx); }
+  else if (screen === 'death') deathScreen();
+  else if (screen === 'space') transitionToSpace();
+  else if (screen === 'restart') { pickLives(); chooseScreen(); }
+}
+
+document.addEventListener("click", (e) => {
+  const goTarget = e.target.closest("[data-go]")?.dataset.go;
+  if (goTarget) { go(goTarget); return; }
 });
 
 // старт: короткое «пробуждение» и титул
