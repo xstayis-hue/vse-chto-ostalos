@@ -30,6 +30,9 @@ function playAscent(host, person, onDone, onPrepare) {
   const url = typeof memoryImageUrl === 'function' ? memoryImageUrl(person, last) : '';
   if (url) memLayer.style.backgroundImage = `url("${url}")`;
   if (typeof composedMemoryUrl === 'function') composedMemoryUrl(person, last).then(src => { if (src && !done) memLayer.style.backgroundImage = `url("${src}")`; });
+  const cosmicPlate = document.createElement('div');
+  cosmicPlate.className = 'ascent-cosmic-plate';
+  cosmicPlate.style.backgroundImage = "url('assets/space-finale.jpg')";
 
   try {
     renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -39,7 +42,7 @@ function playAscent(host, person, onDone, onPrepare) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
   renderer.domElement.className = 'ascent-canvas';
-  host.append(renderer.domElement, memLayer, flash, caption);
+  host.append(renderer.domElement, memLayer, cosmicPlate, flash, caption);
   cleanup.push(() => renderer.dispose());
 
   const scene = new THREE.Scene();
@@ -169,6 +172,7 @@ function playAscent(host, person, onDone, onPrepare) {
     memLayer.style.opacity = String(1 - seg(t, 3600, 4600));
     memLayer.style.filter = `brightness(${1 + over * 3}) blur(${over * 6}px) saturate(${1 - over})`;
     memLayer.style.transform = `scale(${1 + over * 0.08})`;
+    cosmicPlate.style.opacity = String(seg(t, 15500, 22000));
     flash.style.opacity = String(1 - seg(t, 1200, 7000));
     if (t > 4600) memLayer.style.display = 'none';
 

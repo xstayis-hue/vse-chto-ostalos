@@ -726,6 +726,11 @@ function spaceScreen() {
       sky.colorSpace = THREE.SRGBColorSpace;
       sky.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
       scene.background = sky;
+      new THREE.TextureLoader().load('assets/space-art.jpg', (art) => {
+        art.mapping = THREE.EquirectangularReflectionMapping;
+        art.colorSpace = THREE.SRGBColorSpace;
+        scene.background = art;
+      }, undefined, () => {});
       // Звёзды — отдельные точки, а не увеличенные пиксели панорамы.
       // Фиксированная последовательность сохраняет рисунок между запусками.
       let starSeed = 73841;
@@ -1380,7 +1385,9 @@ void main(){
       starField.rotation.y = state.t * 0.00018;
       starMaterial.uniforms.uTime.value = state.t;
       // Едва заметное изменение плотности звёзд заменяет постоянные маркеры.
-      starMaterial.uniforms.uOpacity.value = space3d.quality.starOpacity * (0.94 + Math.sin(state.t * 0.035) * 0.06);
+       const zoneDistance = Math.hypot(cam.pos.x - EARTH.x, cam.pos.y - EARTH.y, cam.pos.z - EARTH.z) - EARTH.r;
+       const deep = clamp((zoneDistance - 12) / 58, 0, 1);
+       starMaterial.uniforms.uOpacity.value = space3d.quality.starOpacity * (0.88 + deep * .12) * (0.94 + Math.sin(state.t * 0.035) * 0.06);
       space3d.sunUniforms.uTime.value = state.t;
       space3d.moons.forEach(m => {
         const a = m.phase + state.t * m.speed;
@@ -1388,7 +1395,7 @@ void main(){
       });
       nebulaGroup.rotation.y = state.t * 0.00008;
       nebulaSprites.forEach(sprite => {
-        sprite.material.opacity = sprite.userData.base * (space3d.quality.level === 'economy' ? .55 : .72) * (0.82 + 0.18 * Math.sin(state.t * 0.16 + sprite.userData.phase));
+         sprite.material.opacity = sprite.userData.base * (space3d.quality.level === 'economy' ? .55 : .72) * (.72 + deep * .28) * (0.82 + 0.18 * Math.sin(state.t * 0.16 + sprite.userData.phase));
       });
       camera.lookAt(cam.pos.x + B.f.x, cam.pos.y + B.f.y, cam.pos.z + B.f.z);
       meshes.forEach((mesh, i) => {
