@@ -12,26 +12,17 @@ const APP_URL = 'https://vse-chto-ostalos.xstayis.workers.dev/';
 /* The name is unchanged by request: PXAXSPACE stays. */
 const NAME = 'PXAXSPACE';
 
-/* Description shows in the empty chat, above the START button — exactly the place
-   the welcome text belongs. Telegram allows 512 characters. */
-const DESCRIPTION = [
-  'Это не игра и не тест.',
-  '',
-  'Ты откроешь глаза чужим человеком и проживёшь его жизнь за несколько минут: шесть кадров, ни одного решения, в конце — то, что останется.',
-  '',
-  '🎧 Для погружения в реинкарнацию надень наушники.',
-  'Звук здесь — половина происходящего.',
-  '',
-  'Дальше — тишина и космос.',
-].join('\n');
+/* Description shows in the empty chat, above the START button. Only the headphones
+   line belongs here: the rest was written over the picture and said too much. */
+const DESCRIPTION = '🎧 Для погружения в реинкарнацию надень наушники.';
 
-/* Short description: shown in the bot's profile card and in search. 120 chars max. */
-const SHORT = 'Жизнь перед глазами, затем космос. Надень наушники.';
+/* Short description: shown in the bot's profile card and in search. 120 chars max.
+   The headphones line only — the same single instruction as the full description. */
+const SHORT = 'Надень наушники.';
 
-const COMMANDS = [
-  { command: 'start', description: 'Прожить жизнь' },
-  { command: 'about', description: 'Что это такое' },
-];
+/* No command list: the bot has no webhook, so /about would sit there unanswered.
+   One button that opens the mini app is the whole interface. */
+const COMMANDS = [];
 
 async function call(method, params) {
   const r = await fetch(`${API}/${method}`, {
@@ -69,7 +60,7 @@ async function step(label, method, params) {
   await step('краткое описание', 'setMyShortDescription', { short_description: SHORT });
   await step('команды', 'setMyCommands', { commands: COMMANDS });
   await step('кнопка меню → мини-апп', 'setChatMenuButton', {
-    menu_button: { type: 'web_app', text: 'Прожить жизнь', web_app: { url: APP_URL } },
+    menu_button: { type: 'web_app', text: 'Войти', web_app: { url: APP_URL } },
   });
 
   console.log('');
