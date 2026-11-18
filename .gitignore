@@ -6,3 +6,5 @@ _lives.txt
 assets/_probe-*.jpg
 tools/_*.cjs
 tools/_*.mjs
+bot-worker/.bot-webhook-secret.tmp
+bot-worker/.wrangler
