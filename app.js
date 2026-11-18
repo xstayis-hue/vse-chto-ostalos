@@ -593,7 +593,7 @@ function spaceScreen() {
     <div class="hud">
       <div class="hud-row">
         <div class="panel">
-          <div class="eyebrow">теперь можно просто быть</div><div class="space-zone" id="space-zone">околоземная тишина</div>
+          <div class="eyebrow">теперь можно просто быть</div>
         </div>
         <div class="panel navigation-panel" style="text-align:right">
           <div class="eyebrow">навигация</div>
@@ -972,7 +972,7 @@ void main(){
     events: { earth: false, moon: false, far: false },
     nearbyExpedition: null,
     pacing: { next: 78, beat: 0, lastMovement: 0 },
-    braking: false, zone: '', phenomenon: { next: 52, until: 0, kind: 0 },
+    braking: false,
   };
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -1018,43 +1018,6 @@ void main(){
     AudioLayer.ping(beat.freq, 2.8, 0.018);
     quietSignal(beat.line, 7200);
     p.next = state.t + Math.min(210, 78 + p.beat * 24);
-  }
-
-  function updateSpaceZone(distance) {
-    const zone = distance < 12 ? 'околоземная тишина' : distance < 70 ? 'между орбитами' : 'глубокий космос';
-    if (zone === state.zone) return;
-    state.zone = zone;
-    const el = $('#space-zone');
-    if (el) { el.textContent = zone; el.classList.remove('zone-shift'); void el.offsetWidth; el.classList.add('zone-shift'); }
-    AudioLayer.placeCue(zone === 'глубокий космос' ? 'field' : zone === 'между орбитами' ? 'platform' : 'room');
-  }
-
-  function cosmicPhenomenon() {
-    if (reducedMotion || state.modal || state.t < state.phenomenon.next) return;
-    state.phenomenon.kind = Math.floor(state.t / 52) % 3;
-    state.phenomenon.until = state.t + 9;
-    state.phenomenon.next = state.t + 82 + state.phenomenon.kind * 13;
-    const lines = ['ДАЛЁКАЯ ВСПЫШКА ПРОШЛА ПО КРАЮ ЗРЕНИЯ.', 'СОЛНЕЧНЫЙ ВЕТЕР ПЕРЕПИСАЛ ЧАСТЬ ЗВЁЗД.', 'ПРОСТРАНСТВО НА МГНОВЕНИЕ СТАЛО ТЕМНЕЕ.'];
-    quietSignal(lines[state.phenomenon.kind], 6200);
-    AudioLayer.ping([340, 180, 90][state.phenomenon.kind], 3.2, .018);
-  }
-
-  function drawCosmicPhenomenon() {
-    const left = state.phenomenon.until - state.t;
-    if (left <= 0 || reducedMotion) return;
-    const alpha = Math.min(1, left / 3, (9 - left) / 2);
-    ctx.save();
-    if (state.phenomenon.kind === 0) {
-      const g = ctx.createRadialGradient(W * .72, H * .3, 0, W * .72, H * .3, W * .7);
-      g.addColorStop(0, `rgba(230,180,110,${.15 * alpha})`); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    } else if (state.phenomenon.kind === 1) {
-      ctx.strokeStyle = `rgba(150,205,220,${.18 * alpha})`; ctx.lineWidth = 1;
-      for (let i = 0; i < 16; i++) { const y = (i * 53 + state.t * 24) % H; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y - H * .1); ctx.stroke(); }
-    } else {
-      const g = ctx.createRadialGradient(W * .5, H * .48, 0, W * .5, H * .48, W * .72);
-      g.addColorStop(0, `rgba(1,3,7,${.68 * alpha})`); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    }
-    ctx.restore();
   }
 
   // --- ориентация камеры: yaw/pitch -> базис (с учётом «дыхания») ---
@@ -1306,7 +1269,6 @@ void main(){
     state.last = now;
     state.t += dt;
     if (space3d) adaptQuality(dt);
-    pacingDirector(dt);
     for (const orbit of orbiting) {
       const angle = orbit.angle + state.t * orbit.speed;
       orbit.body.x = Math.cos(angle) * orbit.radius;
@@ -1422,9 +1384,6 @@ void main(){
     const dE = Math.hypot(cam.pos.x - EARTH.x, cam.pos.y - EARTH.y, cam.pos.z - EARTH.z) - EARTH.r;
     const dS = Math.hypot(cam.pos.x, cam.pos.y, cam.pos.z) - SUN.r;
     const v = Math.hypot(cam.vel.x, cam.vel.y, cam.vel.z);
-    updateSpaceZone(dE);
-    cosmicPhenomenon();
-    drawCosmicPhenomenon();
     const setHud = (id, value) => { const el = $(id); if (el) el.textContent = value; };
     setHud("#d-earth", dE.toFixed(1) + " R");
     setHud("#d-sun", dS.toFixed(1) + " R");
