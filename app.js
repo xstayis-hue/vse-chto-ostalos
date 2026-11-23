@@ -31,11 +31,28 @@ TG?.onEvent?.("viewportChanged", () => {
 const $ = (s, r = document) => r.querySelector(s);
 const stage = $("#stage");
 const flash = $("#flash");
+const spaceScripts = ['assets/three.min.js', 'assets/star-catalog.js?v=1', 'ascent.js?v=7', 'space-scene.js?v=4'];
+const loadedSpaceScripts = new Set();
+let spaceAssets;
+function loadSpaceAssets() {
+  if (!spaceAssets) spaceAssets = Promise.all(spaceScripts.map(src => new Promise((resolve, reject) => {
+    if (loadedSpaceScripts.has(src)) return resolve();
+    const script = document.createElement('script');
+    script.src = src;
+    script.onload = () => { loadedSpaceScripts.add(src); resolve(); };
+    script.onerror = () => { script.remove(); reject(new Error('Space script unavailable')); };
+    document.head.appendChild(script);
+  }).then(() => true, () => false))).then(results => {
+    if (results.includes(false)) spaceAssets = null;
+  });
+  return spaceAssets;
+}
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 
 // короткий миг/затемнение экрана
 function flashOn() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   flash.classList.add("on");
   setTimeout(() => flash.classList.remove("on"), 140);
 }
@@ -160,8 +177,15 @@ const AudioLayer = {
 function typeText(el, text, speed = 26) {
   if (!el) return Promise.resolve(); // экран уже сменился — печатать некуда
   return new Promise((done) => {
-    el.setAttribute("aria-live", "polite");
     el.textContent = "";
+    const accessible = document.createElement('span');
+    accessible.className = 'sr-only';
+    accessible.textContent = text;
+    const visual = document.createElement('span');
+    visual.setAttribute('aria-hidden', 'true');
+    const typed = document.createTextNode('');
+    visual.append(typed);
+    el.append(accessible, visual);
     let cur = null;
     let complete = false;
     const showAll = () => {
@@ -172,15 +196,15 @@ function typeText(el, text, speed = 26) {
       done();
     };
     el.addEventListener("click", showAll, { once: true });
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) { showAll(); return; }
+    if (!speed || matchMedia("(prefers-reduced-motion: reduce)").matches) { showAll(); return; }
     cur = document.createElement("i");
     cur.className = "cursor";
-    el.appendChild(cur);
+    visual.appendChild(cur);
     let i = 0;
     (function step() {
       if (!el.isConnected) { done(); return; } // экран сменился посреди печати
       if (i < text.length && !complete) {
-        cur.insertAdjacentText("beforebegin", text[i++]);
+        typed.appendData(text[i++]);
         setTimeout(step, speed);
       } else if (!complete) { complete = true; cur.remove(); done(); }
     })();
@@ -291,7 +315,7 @@ function readSavedRun() {
     return { ...saved, life };
   } catch { return null; }
 }
-function restoreRun() {
+async function restoreRun() {
   const saved = readSavedRun();
   if (!saved) return false;
   LIFE = saved.life;
@@ -301,7 +325,11 @@ function restoreRun() {
   runPhase = ['space', 'departure'].includes(saved.phase) ? saved.phase : 'memory';
   flightCheckpoint = saved.flight || null;
   memIdx = clamp(Number(saved.scene) || 0, 0, LIFE.memories.length - 1);
-  if (runPhase === 'space') spaceScreen(); else if (runPhase === 'departure') deathScreen(); else memoryScreen(memIdx);
+  if (runPhase === 'space') {
+    const version = screenVersion;
+    await loadSpaceAssets();
+    if (version === screenVersion) spaceScreen();
+  } else if (runPhase === 'departure') deathScreen(); else memoryScreen(memIdx);
   return true;
 }
 function clearSavedRun() {
@@ -429,7 +457,11 @@ function pickLives() {
 
 // ---------- рендер экранов ----------
 let cleanupSpace = null;
+let cleanupMemory = null;
+let screenVersion = 0;
 function render(html) {
+  screenVersion++;
+  cleanupMemory?.(); cleanupMemory = null;
   if (cleanupSpace) { cleanupSpace(); cleanupSpace = null; }
   stage.classList.add('is-changing');
   stage.innerHTML = html;
@@ -448,7 +480,7 @@ async function titleScreen() {
       <div class="scripture-mark"><span>${firstScripture[0]}</span><small>${firstScripture[1]}</small></div>
       <div class="title-wrap">
         <div class="eyebrow">ты уже был здесь</div>
-        <h1 class="title serif"><span class="line">Всё, что от меня</span><span class="ost" data-t="ОСТАЛОСЬ">ОСТАЛОСЬ</span></h1>
+        <h1 class="title serif" aria-label="Всё, что от меня ОСТАЛОСЬ"><span class="line" aria-hidden="true">Всё, что от меня</span><span class="ost" data-t="ОСТАЛОСЬ" aria-hidden="true">ОСТАЛОСЬ</span></h1>
         <p class="title-description">Целая жизнь. Несколько мгновений.<br>Ты помнишь всё, кроме того,<br>кто сейчас смотрит.</p>
         <div class="start-row">
           <button class="button primary title-button" data-go="${saved ? "resume" : "begin"}">${saved ? resumeLabel : "Вспомнить"} <span>↗</span></button>
@@ -498,7 +530,7 @@ const SCRIPTURES = [SCRIPTURE_MEMORY, SCRIPTURE_TITLE, SCRIPTURE_DEATH];
 
 /* Один кадр воспоминания — и он же переход к следующему.
 
-   Никаких кнопок и выборов. Жизнь проходит сама, как перед глазами: кадр
+   Без сюжетных выборов. Жизнь проходит сама, как перед глазами: кадр
    всплывает, читается, и глаза закрываются. Через 3–5 секунд они открываются
    уже на другом возрасте. Так шесть кадров идут одним движением, без единого
    действия игрока.
@@ -535,12 +567,35 @@ async function memoryScreen(idx) {
         <h2 class="serif" id="cap-h"></h2>
         <p id="cap-p"></p>
       </div>
+      <div class="witness-controls"><button type="button" class="quiet-control" data-memory-pause>Пауза</button><button type="button" class="quiet-control" data-memory-next>Дальше</button></div>
       <div class="blink" id="blink" aria-hidden="true"></div>
     </div>`);
 
   const heading = $('#cap-h'), description = $('#cap-p');
   const frame = stage.querySelector('.pixel-memory');
   const blink = $('#blink');
+  const pauseButton = $('[data-memory-pause]');
+  let held = false, timedOut = false, timer;
+  const next = idx + 1 < total ? 'next' : 'death';
+  const waitForFrame = ms => new Promise(resolve => {
+    const advance = () => {
+      if (!blink.isConnected) return resolve();
+      if (held || document.hidden) return;
+      resolve();
+    };
+    timer = setTimeout(() => { timedOut = true; advance(); }, ms);
+    const onVisible = () => { if (timedOut) advance(); };
+    pauseButton.addEventListener('click', onVisible);
+    document.addEventListener('visibilitychange', onVisible);
+    cleanupMemory = () => { clearTimeout(timer); document.removeEventListener('visibilitychange', onVisible); resolve(); };
+  });
+  cleanupMemory = () => clearTimeout(timer);
+  pauseButton.addEventListener('click', () => {
+    held = !held;
+    pauseButton.textContent = held ? 'Продолжить' : 'Пауза';
+    if (held) { heading.click(); description.click(); }
+  });
+  $('[data-memory-next]').addEventListener('click', () => go(next));
 
   composedMemoryUrl(LIFE, idx).then((src) => {
     if (!src || !frame?.isConnected) return;
@@ -554,6 +609,7 @@ async function memoryScreen(idx) {
     frame.insertBefore(img, frame.querySelector('.pixel-fx'));
     frame.classList.add('has-photo');
   });
+  preloadMemoryImage(LIFE, idx + 1);
 
   AudioLayer.memoryCue(idx);
   AudioLayer.placeCue(m.loc || m.fx);
@@ -565,29 +621,33 @@ async function memoryScreen(idx) {
 
   await pause(600);
   if (!heading?.isConnected) return;
-  await typeText(heading, m.h, 24);
+  await typeText(heading, m.h, held ? 0 : 24);
   await pause(320);
-  if (heading?.isConnected) await typeText(description, m.p, 15);
+  if (heading?.isConnected) await typeText(description, m.p, held ? 0 : 15);
   if (!heading?.isConnected) return;
 
   // How long this frame is held. Reading time, not a fixed delay: the beat lasts
   // as long as the sentence needs, and the last frame stays longer than the first.
   const chars = (m.h + m.p).length;
   const hold = Math.min(9000, 2600 + chars * 26);
-  await pause(hold);
-  if (!heading?.isConnected) return;
-
-  // The eyes close. The next frame opens on its own.
-  const next = idx + 1 < total ? 'next' : 'death';
+  await waitForFrame(hold);
+  if (!blink.isConnected) return;
   await closeEyes(blink);
-  if (!stage.querySelector('#blink')?.isConnected) return;
+  if (!blink.isConnected) return;
+  if (held || document.hidden) {
+    blink.classList.remove('shut'); blink.classList.add('open');
+    timedOut = false;
+    cleanupMemory?.();
+    await waitForFrame(0);
+    if (!blink.isConnected) return;
+  }
   go(next);
 }
 
 /* 3.2 s shut: a fast squeeze, a held dark, then a slow lift. The dark is long
    enough to feel like a blink between two ages rather than a fade. */
 function closeEyes(blink) {
-  if (!blink) return Promise.resolve();
+  if (!blink || matchMedia('(prefers-reduced-motion: reduce)').matches) return Promise.resolve();
   blink.classList.remove('open');
   blink.classList.add('shut');
   return new Promise((done) => setTimeout(done, 3200));
@@ -611,8 +671,15 @@ function plural(n, one, few, many) {
   return many;
 }
 
-function transitionToSpace() {
-  if (document.querySelector('.ascent')) return;
+async function transitionToSpace() {
+  const button = $('[data-go="space"]');
+  if (!button || button.disabled || document.querySelector('.ascent')) return;
+  button.disabled = true;
+  button.textContent = 'Загрузка…';
+  await loadSpaceAssets();
+  if (!button.isConnected) return;
+  button.textContent = 'Отпустить';
+  if (typeof playAscent !== 'function') { spaceScreen(); return; }
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) { spaceScreen(); return; }
   // The ascent lives in its own layer above the stage, so the space scene can
   // be mounted underneath while the Earth is still receding: one continuous shot.
@@ -637,6 +704,7 @@ function transitionToSpace() {
   const skip = host.querySelector('.ascent-skip');
   skip.textContent = 'Пропустить';
   skip.addEventListener('click', stop);
+  skip.focus();
 }
 
 async function deathScreen() {
@@ -661,13 +729,14 @@ async function deathScreen() {
     </div>`);
   // Сцена смерти тоже говорит от первого лица: это последняя мысль,
   // а не отчёт системы наблюдения.
-  await typeText($("#death-h"), 'Я больше не отвечаю.', 90);
+  const heading = $("#death-h"), description = $("#death-p"), tail = $("#death-t");
+  await typeText(heading, 'Я больше не отвечаю.', 90);
   await pause(1600);
-  if (!$("#death-p")) return;
-  await typeText($("#death-p"), "Это не похоже на конец — скорее на комнату, из которой вышли, не закрыв дверь.", 60);
+  if (!description.isConnected) return;
+  await typeText(description, "Это не похоже на конец — скорее на комнату, из которой вышли, не закрыв дверь.", 60);
   await pause(2400);
-  if (!$("#death-t")) return;
-  await typeText($("#death-t"), LIFE.last ? `Последнее, что я успела сказать: «${LIFE.last}».`.replace('успела', LIFE.gender === 'f' ? 'успела' : 'успел') : "Отсчёт времени не ведётся.", 40);
+  if (!tail.isConnected) return;
+  await typeText(tail, LIFE.last ? `Последнее, что я успела сказать: «${LIFE.last}».`.replace('успела', LIFE.gender === 'f' ? 'успела' : 'успел') : "Отсчёт времени не ведётся.", 40);
 }
 
 function pause(ms) {
@@ -697,10 +766,10 @@ function spaceScreen() {
       <div class="signal-state" id="signal-state" aria-live="polite"></div>
       <div class="hud-row" style="align-items:flex-end">
         <div class="dpad" id="dpad">
-          <button class="dbtn" data-th="f" aria-label="вперёд">▲</button>
-          <button class="dbtn" data-th="l" aria-label="влево">◀</button>
-          <button class="dbtn" data-th="b" aria-label="назад">▼</button>
-          <button class="dbtn" data-th="r" aria-label="вправо">▶</button>
+          <button class="dbtn" data-th="f" aria-label="лететь вперёд">▲</button>
+          <button class="dbtn" data-th="l" aria-label="повернуть влево">◀</button>
+          <button class="dbtn" data-th="b" aria-label="лететь назад">▼</button>
+          <button class="dbtn" data-th="r" aria-label="повернуть вправо">▶</button>
         </div>
         <div class="stick" id="stick" role="group" aria-label="тяга"><i></i></div>
         <div class="keys">
@@ -733,7 +802,12 @@ function spaceScreen() {
     cam.yaw = flightCheckpoint.yaw; cam.pitch = clamp(flightCheckpoint.pitch, -1.35, 1.35);
     cam.pos = { ...flightCheckpoint.pos };
   }
-  const saveFlight = () => { flightCheckpoint = { yaw: cam.yaw, pitch: cam.pitch, pos: { ...cam.pos } }; persistRun(); };
+  let completed = false;
+  const saveFlight = () => {
+    if (completed) return;
+    flightCheckpoint = { yaw: cam.yaw, pitch: cam.pitch, pos: { ...cam.pos } };
+    persistRun();
+  };
   saveFlight();
   const saveTimer = setInterval(saveFlight, 5000);
   addEventListener('pagehide', saveFlight);
@@ -1314,41 +1388,11 @@ function spaceScreen() {
     state.braking = true;
   };
   $("#k-scan").onclick = () => {
+    if (state.modal) return;
+    const dS = Math.hypot(cam.pos.x, cam.pos.y, cam.pos.z) - SUN.r;
+    if (dS > 700 && !state.events.far) { state.events.far = true; eventSignal(); return; }
     quietSignal(['Тебе больше не нужно ничего доказывать.', 'Внизу осталось всё, что казалось бесконечным.', 'Ты здесь. Этого достаточно.', 'Тишина не требует ответа.'][Math.floor(state.t / 17) % 4], 8000);
     AudioLayer.ping(220, 3, 0.012);
-    return;
-    AudioLayer.ping(760, 0.6, 0.1);
-    const undiscovered = EXPEDITIONS
-      .filter((exp) => !RUN.expeditions.includes(exp.id))
-      .map((exp) => ({ exp, d: expeditionDistance(exp) }))
-      .sort((a, b) => a.d - b.d)[0];
-    if (undiscovered && undiscovered.d < 18) {
-      state.nearbyExpedition = undiscovered.exp;
-      inspectExpedition(undiscovered.exp);
-      return;
-    }
-    const dE = Math.hypot(cam.pos.x - EARTH.x, cam.pos.y - EARTH.y, cam.pos.z - EARTH.z) - EARTH.r;
-    const dS = Math.hypot(cam.pos.x, cam.pos.y, cam.pos.z) - SUN.r;
-    const dMoon = Math.hypot(cam.pos.x - MOON.x, cam.pos.y - MOON.y, cam.pos.z - MOON.z) - MOON.r;
-    if (state.modal) return;
-    if (dMoon < 3 && !state.events.moon) { state.events.moon = true; eventMoon(); return; }
-    if (dS > 700 && !state.events.far) { state.events.far = true; eventSignal(); return; }
-    if (dE > 22 && !state.events.earth) { state.events.earth = true; eventEarthFar(); return; }
-    let near = { name: "—", d: Infinity };
-    for (const b of BODIES) {
-      const d = Math.hypot(cam.pos.x - b.x, cam.pos.y - b.y, cam.pos.z - b.z) - b.r;
-      if (d < near.d) near = { name: b.name, d };
-    }
-    if (state.nearbyExpedition && !RUN.expeditions.includes(state.nearbyExpedition.id)) {
-      inspectExpedition(state.nearbyExpedition);
-      return;
-    }
-    let msg;
-    if (near.name === "СОЛНЦЕ" && near.d < 25) msg = `СОЛНЦЕ · дистанция ${near.d.toFixed(1)} R<br>ТЕЛО ОБЛЕТЕЛО ЦЕНТР СИСТЕМЫ.<br><span style="color:var(--danger)">РАДИАЦИЯ НЕ ИМЕЕТ СМЫСЛА ДЛЯ ТОГО, ЧТО ОСТАЛОСЬ.</span>`;
-    else if (near.name === "ЛУНА" && near.d < 3) msg = `ЛУНА · дистанция ${near.d.toFixed(2)} R<br>НА ПОВЕРХНОСТИ: СВЕТЯЩЕЕСЯ ОКНО.<br><span style="color:var(--danger)">ТАМ, ГДЕ БЫЛА ТВОЯ КОМНАТА.</span>`;
-    else if (near.name === "ЗЕМЛЯ" && near.d < 3.2) msg = `ЗЕМЛЯ · дистанция ${near.d.toFixed(2)} R<br>ОГНИ ГОРОДОВ ПОГАСЛИ ЦЕЛИКОМ.<br><span style="color:var(--danger)">НО КТО-ТО ВКЛЮЧИЛ ОДИН.</span>`;
-    else msg = `БЛИЖАЙШИЙ ОБЪЕКТ: ${near.name} · ${near.d.toFixed(1)} R<br>ДО СОЛНЦА: ${dS.toFixed(1)} R · ДО ЗЕМЛИ: ${dE.toFixed(1)} R<br>ТЕЛ В СИСТЕМЕ: ${BODIES.length}. ПУСТОТЫ БОЛЬШЕ, ЧЕМ МАТЕРИИ.`;
-    showOverlay({ cy: true, title: "СКАНИРОВАНИЕ СЕКТОРА", body: msg, actions: [["Понял", null]] });
   };
 
   // --- события ---
@@ -1448,6 +1492,7 @@ function spaceScreen() {
     flashOn();
     const meta = completeMetaRun();
     const summary = runSummary();
+    completed = true;
     persistRun("complete");
     const retained = summary.retained;
     const endingTitle = choice === "keep"
@@ -1466,7 +1511,7 @@ function spaceScreen() {
           <p class="faint" style="max-width:420px;margin:14px auto 0">${endingText}</p>
           <div class="ending-silence" id="endingSilence">не закрывай. просто побудь здесь</div>
           <div class="ending-actions" id="endingActions" hidden>
-            <div class="result-card"><span>запись · ${LIFE.name}</span><small>${LIFE.symbol || "след не определён"} · ${choiceText}</small></div>
+             <div class="result-card"><span>запись · ${LIFE.name}</span><small>${LIFE.symbol || "след не определён"} · ${escapeHTML(choiceText)}</small></div>
             <div class="row center">
               <button class="button ghost" data-go="title">Выйти</button>
               <button class="button ghost" data-share>Поделиться</button>
@@ -1501,12 +1546,7 @@ function spaceScreen() {
     removeEventListener('blur', resetInput);
     document.removeEventListener("visibilitychange", onVisible);
     removeEventListener("keydown", onKD); removeEventListener("keyup", onKU);
-    if (space3d) {
-      space3d.scene.background?.dispose();
-      space3d.scene.traverse((o) => { o.geometry?.dispose(); o.material?.map?.dispose(); Object.values(o.material?.uniforms || {}).forEach(u => { if (u.value?.isTexture) u.value.dispose(); }); o.material?.dispose(); });
-      space3d.renderer.dispose();
-      space3d.renderer.forceContextLoss();
-    }
+    space3d?.dispose();
   };
 
   frame();
@@ -1577,3 +1617,6 @@ document.addEventListener('visibilitychange', () => {
   else if (!AudioLayer.muted && AudioLayer.started) AudioLayer.ctx?.resume().catch(() => {});
 });
 TG?.BackButton?.onClick?.(() => titleScreen());
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || new URLSearchParams(location.search).has('offline-test'))) {
+  navigator.serviceWorker.register('./sw.js').catch(error => console.warn('Офлайн-режим недоступен:', error));
+}

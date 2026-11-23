@@ -7,8 +7,8 @@
  *
  * Secrets (set with `wrangler secret put`, never in this file):
  *   BOT_TOKEN     — the bot token from BotFather
- *   WEBHOOK_TOKEN — a random string Telegram echoes back in the webhook path,
- *                   so a stranger cannot POST fake updates to this worker
+ *   WEBHOOK_HEADER_TOKEN — Telegram setWebhook secret_token
+ *   WEBHOOK_TOKEN — legacy migration only; remove after switching Telegram
  */
 
 const REPLY = 'Открой приложение.';
@@ -30,8 +30,20 @@ async function telegram(token, method, payload) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(8000),
   });
-  return r.json();
+  const result = await r.json();
+  return { ok: r.ok && result?.ok === true, code: result?.error_code || r.status };
+}
+
+async function sameSecret(expected, received) {
+  if (!expected || !received) return false;
+  const encoder = new TextEncoder();
+  const [a, b] = await Promise.all([expected, received].map(value => crypto.subtle.digest('SHA-256', encoder.encode(value))));
+  const left = new Uint8Array(a), right = new Uint8Array(b);
+  let diff = 0;
+  for (let i = 0; i < left.length; i++) diff |= left[i] ^ right[i];
+  return diff === 0;
 }
 
 export default {
@@ -39,20 +51,18 @@ export default {
     const url = new URL(request.url);
 
     // Health check, and a way to confirm the route without touching Telegram.
-    if (request.method === 'GET') {
+    if (request.method === 'GET' && ['/', '/api/health'].includes(url.pathname)) {
       return new Response(JSON.stringify({ ok: true, worker: 'vse-chto-ostalos-bot' }), {
         headers: { 'content-type': 'application/json' },
       });
     }
 
-    // Telegram is the only caller that should reach the POST path, and it must
-    // know the secret segment of the URL.
-    if (env.WEBHOOK_TOKEN && url.pathname !== `/webhook/${env.WEBHOOK_TOKEN}`) {
-      return new Response('not found', { status: 404 });
-    }
-    if (!env.BOT_TOKEN) {
-      return new Response('bot token is not configured', { status: 500 });
-    }
+    if (request.method !== 'POST') return new Response('not found', { status: 404 });
+    const allowed = env.WEBHOOK_HEADER_TOKEN
+      ? url.pathname === '/webhook' && await sameSecret(env.WEBHOOK_HEADER_TOKEN, request.headers.get('X-Telegram-Bot-Api-Secret-Token'))
+      : await sameSecret(env.WEBHOOK_TOKEN && '/webhook/' + env.WEBHOOK_TOKEN, url.pathname);
+    if (!allowed) return new Response('not found', { status: 404 });
+    if (!env.BOT_TOKEN) return new Response('not configured', { status: 503 });
 
     let update;
     try {
@@ -62,20 +72,24 @@ export default {
     }
 
     const appUrl = env.APP_URL || 'https://vse-chto-ostalos.xstayis.workers.dev/';
-    const message = update.message || update.edited_message;
-    const text = message?.text || '';
+    const message = update?.message;
+    const text = typeof message?.text === 'string' ? message.text : '';
     const chatId = message?.chat?.id;
 
-    // /start (with or without a payload) is the only trigger. Other commands get
-    // the same line, because silence in a doorway is confusing.
-    if (chatId) {
-      const cmd = text.split(/\s+/)[0].split('@')[0];
-      if (cmd === '/start' || cmd === '/app' || cmd.startsWith('/')) {
-        await telegram(env.BOT_TOKEN, 'sendMessage', answer(chatId, appUrl));
+    if (message?.chat?.type === 'private' && Number.isSafeInteger(chatId) && /^\/(start|app)(?:@pxaxspase_bot)?(?:\s|$)/i.test(text)) {
+      try {
+        const result = await telegram(env.BOT_TOKEN, 'sendMessage', answer(chatId, appUrl));
+        if (!result.ok) {
+          console.warn(JSON.stringify({ event: 'telegram_send_failed', code: result.code }));
+          // Invalid requests and unreachable chats are not fixed by another delivery.
+          if (![400, 403].includes(result.code)) return new Response('retry', { status: 503 });
+        }
+      } catch {
+        console.warn(JSON.stringify({ event: 'telegram_send_unavailable' }));
+        return new Response('retry', { status: 503 });
       }
     }
 
-    // Always 200: a non-2xx makes Telegram retry the same update for hours.
     return new Response('ok', { status: 200 });
   },
 };

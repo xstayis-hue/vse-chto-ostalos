@@ -1,7 +1,7 @@
 # Credits
 
 - `assets/three.min.js` - Three.js r160, MIT License.
-- Planet and moon surface textures, Saturn ring map, Earth night lights, Earth clouds, Milky Way mosaic - Solar System Scope / NASA imagery, CC BY 4.0. Verify and retain attribution when redistributing.
+- Planet and moon surface textures, Saturn ring map, Earth night lights and clouds: repository notes credit [Solar System Scope](https://www.solarsystemscope.com/textures/) and NASA imagery. Solar System Scope lists its textures under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Exact upstream mapping, including the Milky Way mosaic, still needs verification before redistribution under a specific license.
 - `assets/star-catalog.js` - star positions and B-V colours from d3-celestial `stars.6` (Hipparcos / Yale Bright Star Catalogue, magnitudes ≤ 6).
 - `assets/moons/{io,europa,ganymede,callisto,titan,triton}.jpg` - generated with PlusVibe `flux-3-klein` for this project.
 - `assets/sun-api-candidate.jpg` - generated with PlusVibe `flux-3-klein` for this project.

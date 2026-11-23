@@ -188,6 +188,10 @@ body:has(.witness) #grain { opacity: .045; }
 .witness-text { flex: 1; width: min(680px, 100%); justify-content: flex-end; padding: 48px 32px 24px; text-align: left; text-shadow: 0 2px 18px #000, 0 0 40px rgba(0,0,0,.75); }
 .witness-text h2 { font-size: 36px; line-height: 40px; color: #f2eee4; }
 .witness-text p { font-size: 18px; line-height: 28px; color: #d5d1c6; }
+.witness-controls { position: relative; z-index: 21; display: flex; gap: 8px; justify-content: flex-end; padding: 0 24px calc(12px + env(safe-area-inset-bottom)); }
+.witness-controls button { min-height: 44px; padding-inline: 12px; color: #f2eee4; background: #030507; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.ending-actions[hidden] { display: none; }
 .witness .witness-whisper { color: #ada79d; font-size: 14px; line-height: 20px; font-style: italic; }
 .witness-foot { padding: 16px 32px calc(34px + env(safe-area-inset-bottom)); margin: 0; justify-content: flex-end; max-width: 680px; }
 .witness-next { font-size: 14px; line-height: 20px; letter-spacing: .08em; color: #ded9cd; min-height: 48px; }
@@ -260,6 +264,7 @@ body:has(.witness) #grain { opacity: .045; }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .blink { display: none; }
   .memory-photo, .witness-frame, .memory-atmosphere, .memory-keepsake { animation: none !important; }
   .memory-atmosphere, .memory-keepsake { opacity: .22; }
 }

@@ -1,38 +1,29 @@
-// Points the Telegram webhook at the bot worker and verifies it. The token is
-// read from a local file and never printed.
-//   node tools/bot-webhook.cjs            — show current webhook
-//   node tools/bot-webhook.cjs --set URL  — set it (URL must be the full webhook path)
-//   node tools/bot-webhook.cjs --delete   — remove it
-const fs = require('fs');
+// Use protected environment variables, not arguments or URLs containing secrets.
+const { BOT_TOKEN, WEBHOOK_HEADER_TOKEN } = process.env;
+const endpoint = 'https://vse-chto-ostalos-bot.xstayis.workers.dev/webhook';
 
-const RAW = 'C:/Users/xstay/Desktop/Текстовый документ.txt';
-const token = fs.readFileSync(RAW, 'utf8').trim().match(/\d{8,12}:[A-Za-z0-9_-]{30,}/)[0];
-const API = `https://api.telegram.org/bot${token}`;
-const post = (method, body) =>
-  fetch(`${API}/${method}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body || {}),
-  }).then((r) => r.json());
+async function telegram(method, body) {
+  const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${method}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body), signal: AbortSignal.timeout(12000),
+  });
+  const result = await response.json();
+  if (!response.ok || !result.ok) throw new Error(`${method}: Telegram request failed (${result.error_code || response.status})`);
+  return result.result;
+}
 
-(async () => {
-  const setIdx = process.argv.indexOf('--set');
-  if (setIdx > -1) {
-    const url = process.argv[setIdx + 1];
-    if (!url || !/^https:\/\//.test(url)) {
-      console.log('нужен https-адрес: node tools/bot-webhook.cjs --set https://.../webhook/TOKEN');
-      process.exit(1);
-    }
-    // dropPendingUpdates keeps old /start messages from being replayed now
-    const j = await post('setWebhook', { url, drop_pending_updates: true, allowed_updates: ['message'] });
-    console.log('setWebhook:', j.ok ? 'ok' : `${j.error_code} ${j.description}`);
+async function main() {
+  if (!BOT_TOKEN) throw new Error('BOT_TOKEN is required');
+  const action = process.argv[2] || '--status';
+  if (!['--status', '--set'].includes(action) || process.argv.length > 3) throw new Error('Use --status or --set');
+  const bot = await telegram('getMe', {});
+  if (bot.username?.toLowerCase() !== 'pxaxspase_bot') throw new Error('Wrong bot');
+  if (action === '--set') {
+    if (!/^[A-Za-z0-9_-]{32,256}$/.test(WEBHOOK_HEADER_TOKEN || '')) throw new Error('WEBHOOK_HEADER_TOKEN is required');
+    await telegram('setWebhook', { url: endpoint, secret_token: WEBHOOK_HEADER_TOKEN, allowed_updates: ['message'] });
   }
-  if (process.argv.includes('--delete')) {
-    const j = await post('deleteWebhook', { drop_pending_updates: true });
-    console.log('deleteWebhook:', j.ok ? 'ok' : `${j.error_code} ${j.description}`);
-  }
-  const info = await post('getWebhookInfo');
-  const r = info.result || {};
-  console.log('url:', r.url || '(пусто)');
-  console.log('pending:', r.pending_update_count, '· last error:', r.last_error_message || '—');
-})();
+  const info = await telegram('getWebhookInfo', {});
+  console.log(`@${bot.username}: ${info.url === endpoint ? 'current route' : info.url ? 'other route' : 'not configured'}, pending ${info.pending_update_count}, delivery error ${info.last_error_date ? 'recorded' : 'none'}`);
+}
+
+main().catch(error => { console.error(error.cause ? 'Telegram connection failed' : error.message); process.exitCode = 1; });

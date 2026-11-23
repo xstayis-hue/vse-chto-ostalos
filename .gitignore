@@ -8,3 +8,13 @@ tools/_*.cjs
 tools/_*.mjs
 bot-worker/.bot-webhook-secret.tmp
 bot-worker/.wrangler
+
+# secrets
+.env
+.env.*
+!.env.example
+.dev.vars*
+.deploy-staged/
+*.pem
+*.key
+.secrets/

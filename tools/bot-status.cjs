@@ -22,5 +22,6 @@ const show = async (m, p) => {
   await show('getMyShortDescription');
   await show('getMyCommands');
   await show('getChatMenuButton');
-  await show('getWebhookInfo');
+  const info = await call('getWebhookInfo');
+  console.log('getWebhookInfo →', { configured: Boolean(info.result?.url), pending: info.result?.pending_update_count, deliveryError: Boolean(info.result?.last_error_date) });
 })();
