@@ -6,7 +6,7 @@
   },
   "private": true,
   "scripts": {
-    "test": "node --check app.js && node --check content.js && node --check flight.js && node --check pixel-memories.js && node --check ascent.js && node --check memory-images.js && node --check memory-plates.js && node --check memory-composer.js && node --check memory-world.js && node --check sw.js && node --test flight.test.cjs content.test.cjs memory-world.test.cjs bot-worker/worker.test.cjs && node --check space-scene.js && node --check dying-frame.js && node tools/site-assets.cjs",
+    "test": "node --check app.js && node --check content.js && node --check flight.js && node --check pixel-memories.js && node --check ascent.js && node --check memory-images.js && node --check memory-plates.js && node --check memory-composer.js && node --check memory-world.js && node --check sw.js && node --test flight.test.cjs content.test.cjs memory-images.test.cjs memory-world.test.cjs bot-worker/worker.test.cjs && node --check space-scene.js && node --check dying-frame.js && node tools/site-assets.cjs",
     "stage": "node tools/site-assets.cjs --stage"
   }
 }

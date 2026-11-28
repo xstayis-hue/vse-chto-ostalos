@@ -69,8 +69,7 @@ body { background: #000; }
 }
 
 
-/* ---------- the memory frame ----------
-   The plate is a 16:9 photograph shown inside a tall phone frame. Cropping it to
+/* ---------- the memory frame ----------   The plate is a 16:9 photograph shown inside a tall phone frame. Cropping it to
    fill loses most of the room, so the composition is:
      ::before   the same plate, scaled up and blurred — fills the frame
      img        the whole plate, centred, never cropped
@@ -236,7 +235,8 @@ body:has(.witness) #grain { opacity: .045; }
 .stick { width: 80px; height: 80px; background: rgba(0,0,0,.15); backdrop-filter: none; }
 .stick i { border-color: #777f83; background: rgba(200,210,215,.05); }
 .keys .button { font-size: 12px; letter-spacing: 0; text-transform: none; border: 0; background: rgba(0,0,0,.15); backdrop-filter: none; color: #a3adb1; min-height: 44px; }
-.hint { bottom: 240px; width: min(400px, 85%); white-space: normal; font-size: 12px; line-height: 20px; letter-spacing: .03em; text-align: center; opacity: .8; }
+.hint { bottom: 240px; width: min(400px, 85%); white-space: normal; font-size: 12px; line-height: 20px; letter-spacing: .03em; text-align: center; opacity: 0; transition: opacity 1.6s ease; }
+.hint.is-visible { opacity: .86; }
 .signal-state { border: 0; text-transform: none; font-size: 14px; line-height: 20px; color: #aab3b5; }
 
 /* ---------- archive: the last seconds, not a character select ---------- */
@@ -249,6 +249,55 @@ body:has(.witness) #grain { opacity: .045; }
 .memory-stage .caption p, .memory-stage .yeartag { color: #a6a59c !important; }
 .scene-scripture-dark { color: #b8b5a9; text-shadow: none; }
 .last-light { background: #131209; opacity: .35; }
+
+/* Последняя комната, из которой уже вышли: кадр позади текста, расфокусирован
+   и придавлен. Без него смерть — чёрный провал между фотографией и космосом. */
+.death-plate {
+  position: absolute; inset: 0; z-index: 0;
+  background: #02040a center / cover no-repeat;
+  filter: blur(10px) saturate(.45) brightness(.75) contrast(.95);
+  opacity: 0; transform: scale(1.08);
+  transition: opacity 2.6s ease, transform 12s ease-out;
+}
+.death-plate.is-ready { opacity: .9; transform: scale(1); }
+/* Придавка считается вместе с кадром: сама комната уже тёмная, и множитель
+   brightness её просто убирал. Затемнение идёт отдельным слоем и не
+   пересчитывается при каждой смене файла. */
+.death-scene::after {
+  content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: radial-gradient(ellipse at 50% 45%, rgba(2,4,8,.28) 0%, rgba(2,4,8,.62) 70%, rgba(2,4,8,.9) 100%);
+}
+
+/* Экран смерти — один столбец по центру: текст больше не уезжает под цитату
+   и за левый край, а «Отпустить» не висит в пустоте под ним. */
+.memory-stage .death-scene { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 0; }
+.memory-stage .death-scene > .fx, .memory-stage .death-scene > .caption, .memory-stage .death-scene > .scene-scripture { position: relative; z-index: 2; }
+.memory-stage .death-scene .scene-scripture { position: absolute; }
+.death-scene .caption { width: min(560px, calc(100% - 48px)); margin: 0 auto; text-align: left; }
+.death-scene .caption h2 { color: #e6ece8 !important; text-shadow: 0 2px 18px #000; }
+.death-scene .caption p, .death-scene .death-tail { color: #b8c2bc !important; text-shadow: 0 1px 14px #000; }
+.death-yeartag { color: #cfd8d2 !important; letter-spacing: .22em; }
+.death-foot { justify-content: space-between; align-items: center; }
+.death-foot .faint { font-size: 10px; color: #8a9a94; }
+.death-foot .button { border-color: #8a9a94; color: #e6ece8; }
+
+@media (prefers-reduced-motion: reduce) { .death-plate { transition: opacity 1s ease; transform: none; } }
+
+/* Телефон 320–360px: верхняя строка титула и «Звук включён» больше не
+   переносятся на две строки, а описание не рвётся посреди фразы. */
+@media (max-width: 380px) {
+  .title-topline, .title-bottomline { left: 16px; right: 16px; gap: 8px; font-size: 9px; letter-spacing: .1em; }
+  .title-topline { flex-wrap: wrap; align-items: center; }
+  .title-topline .quiet-control { margin-left: auto; padding: 6px 4px; font-size: 11px; }
+  .title-screen .title, .title-screen .title .line { font-size: 30px; }
+  .title-screen .title-description { font-size: 13px; line-height: 1.6; }
+  .title-screen .title-wrap { width: calc(100vw - 32px); max-width: calc(100vw - 32px); }
+  .title-button { letter-spacing: .18em; }
+  .memory-stage .caption h2 { font-size: 21px; line-height: 1.16; }
+  .memory-stage .caption p { font-size: 13px; line-height: 1.45; }
+  .witness-text h2 { font-size: 26px; line-height: 30px; }
+  .hud .keys .button { font-size: 11px; min-width: 88px; }
+}
 
 @keyframes witnessReveal { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slowRecall { from { transform: scale(1.02); } to { transform: scale(1.12) translateX(-1%); } }

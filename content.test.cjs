@@ -23,9 +23,15 @@ test('every life is authored from scratch, without slot-filled permutations', ()
 });
 
 test('every beat is written in the first person', () => {
+  const secondPerson = /(^|[^а-яё])(ты|тебя|тебе|тобой|твой|твоя|твоё|твои|твоим|твоих|ваш|ваша|ваше|ваши|вас|вам|вы)($|[^а-яё])/i;
+  // A line inside «» is someone else speaking, the way «Где ты теперь?» is the
+  // father on the phone. Only the narration itself has to stay first-person.
+  const narration = (text) => String(text).replace(/«[^»]*»/g, '«»');
   for (const life of loadLives()) for (const m of life.memories) {
     assert.ok(!/^Ты /.test(m.h), `${life.name}: second person in «${m.h}»`);
-    assert.ok(/\bя\b|\bмне\b|\bменя\b|мной/i.test(m.h) || /^[«]?[А-ЯA-Z]/.test(m.h), `${life.name}: «${m.h}»`);
+    for (const field of [m.h, m.p, ...(m.choices || []).map((c) => c.label)]) {
+      assert.ok(!secondPerson.test(narration(field)), `${life.name}: second person in «${field}»`);
+    }
   }
 });
 

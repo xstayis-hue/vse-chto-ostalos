@@ -50,6 +50,15 @@ function loadSpaceAssets() {
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 
+// Короткое сообщение поверх любого экрана (в космосе перекрывается своей копией).
+function toast(html) {
+  const el = document.createElement("div");
+  el.className = "overlay toast-layer";
+  el.innerHTML = `<div class="card cy" style="border-color:rgba(143,209,194,.35)"><div class="system">${html}</div></div>`;
+  (document.getElementById("overlay-host") || stage || document.body).appendChild(el);
+  setTimeout(() => el.remove(), 2600);
+}
+
 // короткий миг/затемнение экрана
 function flashOn() {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -58,8 +67,9 @@ function flashOn() {
 }
 
 // ---------- звук (WebAudio, тихий слой) ----------
+const SOUND_KEY = "vse-chto-ostalos:sound";
 const AudioLayer = {
-  muted: false,
+  muted: (() => { try { return localStorage.getItem(SOUND_KEY) === "off"; } catch { return false; } })(),
   ctx: null, master: null, drone: null, started: false,
   ensure() {
     if (this.muted) return;
@@ -261,7 +271,7 @@ const generatedLifePool = Array.from({length:100}, (_, i) => {
 let offeredLives = [];
 const authoredLives = window.CURATED_LIVES || [];
 const lifePool = authoredLives.length ? authoredLives : generatedLifePool;
-const RUN = { choices: {}, signals: [], memories: new Set(), expeditions: [] };
+const RUN = { choices: {}, signals: [], memories: new Set(), expeditions: [], listened: 0, scenes: new Set(), branch: null };
 let runPhase = 'memory';
 let flightCheckpoint = null;
 const RUN_KEY = "vse-chto-ostalos:last-run";
@@ -286,7 +296,7 @@ function archivePercent(meta = readMeta()) {
 function completeMetaRun() {
   const meta = readMeta();
   meta.lives += 1;
-  meta.fragments += Math.min(6, RUN.memories.size);
+  meta.fragments += Math.min(6, runSummary().retained);
   RUN.expeditions.forEach((id) => { if (!meta.expeditions.includes(id)) meta.expeditions.push(id); });
   writeMeta(meta);
   return meta;
@@ -301,6 +311,8 @@ function persistRun(status = "active") {
       choices: RUN.choices,
       expeditions: RUN.expeditions,
       memories: [...RUN.memories],
+      scenes: [...RUN.scenes],
+      listened: RUN.listened,
       scene: Number.isInteger(memIdx) ? memIdx : 0,
       savedAt: new Date().toISOString(),
     }));
@@ -322,6 +334,8 @@ async function restoreRun() {
   RUN.choices = saved.choices && typeof saved.choices === 'object' ? saved.choices : {};
   RUN.expeditions = Array.isArray(saved.expeditions) ? saved.expeditions : [];
   RUN.memories = new Set(Array.isArray(saved.memories) ? saved.memories : []);
+  RUN.scenes = new Set(Array.isArray(saved.scenes) ? saved.scenes : []);
+  RUN.listened = Number(saved.listened) || 0;
   runPhase = ['space', 'departure'].includes(saved.phase) ? saved.phase : 'memory';
   flightCheckpoint = saved.flight || null;
   memIdx = clamp(Number(saved.scene) || 0, 0, LIFE.memories.length - 1);
@@ -339,22 +353,33 @@ function hasActiveRun() {
   return Boolean(readSavedRun());
 }
 function hasMemory(...effects) { return effects.some((effect) => RUN.memories.has(effect)); }
+/* Ветка сигнала — свойство жизни, а не счётчик: у каждой биографии она одна и
+   та же при каждом прохождении, поэтому финал у двух жизней не совпадает. */
+const SIGNAL_BRANCHES = ['voice', 'earth', 'distance', 'quiet'];
+function lifeBranch() {
+  if (RUN.branch) return RUN.branch;
+  const id = Number(LIFE?.id) || 0;
+  RUN.branch = SIGNAL_BRANCHES[Math.abs(id) % SIGNAL_BRANCHES.length];
+  return RUN.branch;
+}
 function runSummary() {
   const meta = readMeta();
+  const retained = Math.min(6, RUN.scenes.size + RUN.memories.size);
   return {
-    retained: RUN.memories.size,
+    retained,
     expeditions: RUN.expeditions.length,
     archivePercent: archivePercent(meta),
-    choseReturn: RUN.memories.has("earth"),
-    choseDistance: RUN.memories.has("distance"),
-    answered: RUN.memories.has("voice"),
+    choseReturn: lifeBranch() === 'earth',
+    choseDistance: lifeBranch() === 'distance',
+    answered: lifeBranch() === 'voice',
   };
 }
 function resultText() {
   const summary = runSummary();
-  const branch = signalBranch();
   const verb = LIFE.gender === "f" ? "прожила" : "прожил";
-  return `Я ${verb} жизнь ${LIFE.name} в «Всё, что от меня ОСТАЛОСЬ». В памяти осталось: ${summary.retained} фрагментов. Ветка сигнала: ${branch}.`;
+  const year = Number(LIFE.year) ? `, ${LIFE.year}` : "";
+  const place = LIFE.place ? `, ${LIFE.place}` : "";
+  return `Я ${verb} чужую жизнь: ${LIFE.name}${year}${place}. В памяти осталось ${summary.retained} ${plural(summary.retained, "фрагмент", "фрагмента", "фрагментов")}. ${branchPhrase()}. «Всё, что от меня ОСТАЛОСЬ».`;
 }
 const CHOICE_LABELS = {
   keep: "сохранить",
@@ -365,18 +390,16 @@ const CHOICE_LABELS = {
   ignore: "промолчать",
 };
 function readableChoices() {
-  return Object.values(RUN.choices).map((id) => CHOICE_LABELS[id] || id).join(" · ") || "решения не сохранены";
+  return Object.values(RUN.choices).map((id) => CHOICE_LABELS[id] || id).join(" · ") || "решений не было";
 }
 function resultCardData() {
   const summary = runSummary();
-  const meta = readMeta();
   return {
     name: LIFE.name,
     symbol: LIFE.symbol || "след не определён",
     branch: signalBranch(),
     retained: summary.retained,
-    archive: archivePercent(meta),
-    choices: Object.values(RUN.choices).join(" · ") || "—",
+    choices: Object.values(RUN.choices).map((id) => CHOICE_LABELS[id] || id).join(" · ") || "решений не было",
   };
 }
 function drawResultCard() {
@@ -391,7 +414,7 @@ function drawResultCard() {
   ctx.fillStyle = "#9fb4aa"; ctx.font = "bold 70px Arial"; ctx.fillText("ОСТАЛОСЬ", 80, 290);
   ctx.fillStyle = "#9fb4aa"; ctx.font = "28px monospace"; ctx.fillText(data.name, 80, 390);
   ctx.fillStyle = "#71847b"; ctx.font = "22px monospace"; ctx.fillText(`${data.symbol} · ${data.retained} фрагм.`, 80, 440);
-  ctx.fillText(`${data.branch} · АРХИВ ${data.archive}%`, 80, 490);
+  ctx.fillText(data.branch, 80, 490);
   ctx.fillStyle = "#536b62"; ctx.font = "18px monospace"; ctx.fillText("ЗАПИСЬ НЕ ПРИНАДЛЕЖИТ НИКОМУ", 80, 550);
   return canvas;
 }
@@ -403,42 +426,55 @@ function downloadResultCard() {
   link.click();
 }
 function signalBranch() {
-  if (hasMemory("voice")) return "ГОЛОС ОТВЕЧАЕТ ТЕБЕ";
-  if (hasMemory("earth")) return "СИГНАЛ НАПРАВЛЕН К ЗЕМЛЕ";
-  if (hasMemory("distance")) return "СИГНАЛ УХОДИТ ДАЛЬШЕ";
-  if (hasMemory("quiet")) return "КАНАЛ ОСТАЁТСЯ ПУСТЫМ";
-  return "ИСТОЧНИК НЕ ОПРЕДЕЛЁН";
+  const branch = lifeBranch();
+  if (branch === 'voice') return "ГОЛОС ОТВЕЧАЕТ ТЕБЕ";
+  if (branch === 'earth') return "СИГНАЛ НАПРАВЛЕН К ЗЕМЛЕ";
+  if (branch === 'distance') return "СИГНАЛ УХОДИТ ДАЛЬШЕ";
+  return "КАНАЛ ОСТАЁТСЯ ПУСТЫМ";
+}
+/* То же самое, но фразой для переписки: капс в отправленном сообщении
+   читается как крик, а не как тишина. */
+function branchPhrase() {
+  const branch = lifeBranch();
+  if (branch === 'voice') return "Голос отвечает тебе";
+  if (branch === 'earth') return "Сигнал направлен к Земле";
+  if (branch === 'distance') return "Сигнал уходит дальше";
+  return "Канал остаётся пустым";
 }
 function branchSignalCopy() {
-  if (hasMemory("voice")) return {
+  const branch = lifeBranch();
+  if (branch === 'voice') return {
     code: "VOICE",
     title: "ГОЛОС В КАНАЛЕ",
     quote: "Ты меня слышишь?",
     body: "СИГНАЛ ПОВТОРЯЕТ ТВОЮ ИНТОНАЦИЮ.<br>ОТВЕТ НЕ ОТЛИЧАЕТСЯ ОТ ВОПРОСА.",
   };
-  if (hasMemory("earth")) return {
+  if (branch === 'earth') return {
     code: "EARTH",
     title: "ВОЗВРАТНЫЙ МАРШРУТ",
     quote: "Дом всё ещё здесь.",
     body: "КООРДИНАТЫ ВЕДУТ К ЗЕМЛЕ.<br>МАРШРУТ ПОСТРОЕН ИЗ ТЕХ МЕСТ, КОТОРЫХ УЖЕ НЕТ.",
   };
-  if (hasMemory("distance")) return {
+  if (branch === 'distance') return {
     code: "DISTANCE",
     title: "СИГНАЛ ИЗ-ЗА ПРЕДЕЛА",
     quote: "Не возвращайся.",
     body: "ИСТОЧНИК УДАЛЯЕТСЯ БЫСТРЕЕ, ЧЕМ ТЫ МОЖЕШЬ К НЕМУ ПРИБЛИЗИТЬСЯ.<br>ПРЕСЛЕДОВАНИЕ ПРИНЯТО.",
   };
-  if (hasMemory("quiet")) return {
+  return {
     code: "QUIET",
     title: "ОБРЫВ КАНАЛА",
     quote: "",
     body: "СИГНАЛ БЫЛ, НО НИЧЕГО НЕ СООБЩИЛ.<br>МОЛЧАНИЕ СОХРАНЕНО КАК ЕДИНСТВЕННЫЙ ФАКТ.",
   };
-  return { code: "UNKNOWN", title: "СИГНАЛ БЕЗ ВЛАДЕЛЬЦА", quote: "", body: "ИСТОЧНИК НЕ ОПРЕДЕЛЁН.<br>ПОДПИСЬ СОВПАДАЕТ С ТВОЕЙ.", };
 }
 function pickLives() {
   const availableLives = window.CURATED_LIVES?.length ? window.CURATED_LIVES : lifePool;
-  const shuffled = [...availableLives];
+  // Прежняя жизнь в новую пятёрку не попадает: иначе при «другой жизни»
+  // снова всплывает только что прожитая. Первая карточка — та, что начнётся.
+  const previousId = String(LIFE?.id);
+  const candidates = availableLives.filter((life) => String(life.id) !== previousId);
+  const shuffled = (candidates.length >= 5 ? candidates : [...availableLives]).slice();
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
@@ -448,6 +484,9 @@ function pickLives() {
   RUN.choices = {};
   RUN.memories = new Set();
   RUN.expeditions = [];
+  RUN.listened = 0;
+  RUN.scenes = new Set();
+  RUN.branch = null;
   runPhase = 'memory';
   flightCheckpoint = null;
   memIdx = 0;
@@ -467,6 +506,35 @@ function render(html) {
   stage.innerHTML = html;
   requestAnimationFrame(() => stage.classList.remove('is-changing'));
   document.querySelectorAll('[data-sound]').forEach(b => { b.textContent = AudioLayer.muted ? 'Звук выключен' : 'Звук включён'; b.setAttribute('aria-pressed', String(AudioLayer.muted)); });
+  syncBackButton();
+}
+/* Системная стрелка Telegram: на титуле её нет, на любом другом экране она
+   возвращает туда же, куда «Вернуться» — иначе из воспоминаний не выйти
+   без перезапуска мини-аппа. */
+function syncBackButton() {
+  try {
+    const onTitle = Boolean(stage.querySelector('.title-screen'));
+    if (!onTitle) TG?.BackButton?.show?.(); else TG?.BackButton?.hide?.();
+  } catch { /* старые клиенты Telegram не знают BackButton */ }
+}
+/* Мягкое подтверждение в оформлении приложения: нативный confirm() посреди
+   чёрного экрана выглядит как ошибка браузера, а не как часть вещи. */
+function confirmSoft(message) {
+  return new Promise((resolve) => {
+    const host = document.createElement('div');
+    host.className = 'overlay';
+    host.innerHTML = `<div class="card" role="dialog" aria-modal="true" style="border-color:rgba(143,209,194,.4)">
+      <div class="system" style="color:var(--dim)">${escapeHTML(message)}</div>
+      <div class="row"><button class="button primary" data-soft="yes">Продолжить</button><button class="button ghost" data-soft="no">Остаться</button></div>
+    </div>`;
+    (document.getElementById('overlay-host') || stage).appendChild(host);
+    const done = (value) => { host.remove(); resolve(value); };
+    host.querySelectorAll('[data-soft]').forEach((button) => {
+      button.onclick = () => done(button.dataset.soft === 'yes');
+    });
+    host.addEventListener('keydown', (event) => { if (event.key === 'Escape') done(false); });
+    host.querySelector('[data-soft="yes"]')?.focus();
+  });
 }
 
 async function titleScreen() {
@@ -544,12 +612,14 @@ async function memoryScreen(idx) {
   runPhase = 'memory';
   const m = LIFE.memories[idx];
   const total = LIFE.memories.length;
+  RUN.scenes.add(idx);
   const fem = LIFE.gender === 'f';
   const ageNow = typeof m.y === 'number' ? m.y - LIFE.year : null;
   const ageWord = ageNow == null ? '' : ageNow === 0 ? 'первый день' : `${ageNow} ${plural(ageNow, "год", "года", "лет")}`;
   const progress = idx / Math.max(1, total - 1);
   // The scripture is the same in every life: only the light lines, never a quote
-  // that belongs to one biography.
+  // that belongs to one biography. Its job is to stay sharp while everything
+  // else loses focus, so it is drawn once, over the opening frame.
   const scripture = SCRIPTURE_MEMORY;
   render(`
     <div class="witness memory-decay" style="--decay:${progress.toFixed(2)}">
@@ -558,16 +628,16 @@ async function memoryScreen(idx) {
           <canvas class="pixel-background" width="480" height="270"></canvas>
           <canvas class="pixel-actor" width="480" height="270"></canvas>
           <div class="memory-atmosphere" data-fx="${m.fx || 'after'}"></div>
-          ${m.prop ? `<div class="memory-keepsake">${escapeHTML(m.prop)}</div>` : ''}
         </div>
       </div>
       <div class="witness-meta"><span>${m.y}</span><span>${ageWord}</span></div>
       ${idx === 0 ? `<blockquote class="witness-scripture"><span>${scripture[0]}</span><cite>${scripture[1]}</cite></blockquote>` : ''}
       <div class="witness-text">
+        ${m.prop ? `<div class="memory-keepsake">${escapeHTML(m.prop)}</div>` : ''}
         <h2 class="serif" id="cap-h"></h2>
         <p id="cap-p"></p>
       </div>
-      <div class="witness-controls"><button type="button" class="quiet-control" data-memory-pause>Пауза</button><button type="button" class="quiet-control" data-memory-next>Дальше</button></div>
+      <div class="witness-controls"><button type="button" class="quiet-control" data-memory-pause>Пауза</button><button type="button" class="quiet-control" data-memory-next>Дальше</button><button type="button" class="quiet-control" data-go="title" aria-label="Выйти из этой жизни">Выйти</button></div>
       <div class="blink" id="blink" aria-hidden="true"></div>
     </div>`);
 
@@ -614,6 +684,12 @@ async function memoryScreen(idx) {
   AudioLayer.memoryCue(idx);
   AudioLayer.placeCue(m.loc || m.fx);
   Haptics.impact(idx === 0 ? 'light' : 'soft');
+  // Сердцебиение начинается вместе с жизнью: модуль умеет замедлять удар от 64
+  // до 34 в последней комнате, но его нужно было подключить к тому же
+  // звуковому контексту. Без attach он не играл ни одного удара.
+  if (idx === 0 && window.DyingFrame && AudioLayer.ctx && AudioLayer.master) {
+    window.DyingFrame.attach(AudioLayer.ctx, AudioLayer.master);
+  }
   window.DyingFrame?.frame(stage, progress, AudioLayer.muted);
 
   // Eyes open on this frame.
@@ -712,21 +788,31 @@ async function deathScreen() {
   persistRun();
   render(`
     <div class="memory-stage">
-      <div class="scene">
+      <div class="scene death-scene">
+        <div class="death-plate" id="deathPlate"></div>
         <div class="fx last-light"></div>
         <blockquote class="scene-scripture scene-scripture-dark"><span>${SCRIPTURE_DEATH[0]}</span><cite>${SCRIPTURE_DEATH[1]}</cite></blockquote>
-        <div class="caption" style="color:#1a221f">
-          <div class="yeartag" style="color:#3c4a45">СЕРДЦЕБИЕНИЕ: НЕ ОБНАРУЖЕНО</div>
+        <div class="caption">
+          <div class="yeartag death-yeartag">СЕРДЦЕБИЕНИЕ: НЕ ОБНАРУЖЕНО</div>
           <h2 class="serif" id="death-h"></h2>
-          <p id="death-p" style="color:#39443f"></p>
-          <p class="death-tail" id="death-t" style="color:#39443f"></p>
+          <p id="death-p"></p>
+          <p class="death-tail" id="death-t"></p>
         </div>
       </div>
-      <div class="scene-foot">
-        <span class="faint" style="font-size:10px;color:#8a9a94">объект больше не числится среди живых</span>
-        <button class="button primary" data-go="space" style="border-color:#8a9a94;color:#e6ece8">Отпустить</button>
+      <div class="scene-foot death-foot">
+        <span class="faint">объект больше не числится среди живых</span>
+        <button class="button primary" data-go="space">Отпустить</button>
       </div>
     </div>`);
+  // Последняя комната остаётся позади, расфокусированной: без неё экран смерти
+  // был чёрным провалом между фотографиями и космосом.
+  const last = LIFE.memories.length - 1;
+  composedMemoryUrl(LIFE, last).then((src) => {
+    const plate = $("#deathPlate");
+    if (!src || !plate?.isConnected) return;
+    plate.style.backgroundImage = `url("${src}")`;
+    plate.classList.add("is-ready");
+  });
   // Сцена смерти тоже говорит от первого лица: это последняя мысль,
   // а не отчёт системы наблюдения.
   const heading = $("#death-h"), description = $("#death-p"), tail = $("#death-t");
@@ -736,7 +822,7 @@ async function deathScreen() {
   await typeText(description, "Это не похоже на конец — скорее на комнату, из которой вышли, не закрыв дверь.", 60);
   await pause(2400);
   if (!tail.isConnected) return;
-  await typeText(tail, LIFE.last ? `Последнее, что я успела сказать: «${LIFE.last}».`.replace('успела', LIFE.gender === 'f' ? 'успела' : 'успел') : "Отсчёт времени не ведётся.", 40);
+  await typeText(tail, LIFE.last ? `Последнее, что я успел сказать: «${LIFE.last}».`.replace('успел', LIFE.gender === 'f' ? 'успела' : 'успел') : "Отсчёт времени не ведётся.", 40);
 }
 
 function pause(ms) {
@@ -780,11 +866,20 @@ function spaceScreen() {
         </div>
       </div>
     </div>
-    <div class="hint" id="hint">Проведи по небу, чтобы оглядеться.<br>Круг слева — движение. Здесь не нужно никуда успевать.</div>
+    <div class="hint" id="hint">Проведи по небу, чтобы оглядеться.<br>Круг слева — движение.<br>Здесь не нужно никуда успевать.</div>
     <div id="overlay-host"></div>`);
 
   AudioLayer.ensure();
   AudioLayer.fade(0.16, 3); // тихий гул включается при выходе в космос
+
+  // Подсказка показывается, только когда управление действительно можно
+  // попробовать: кадр ещё грузится первые секунды, и текст, который гаснет
+  // раньше картинки, не прочитает никто.
+  const hintEl = $("#hint");
+  const showHint = () => { if (hintEl?.isConnected) hintEl.classList.add("is-visible"); };
+  const hideHint = () => { if (hintEl) hintEl.classList.remove("is-visible"); };
+  const hintTimer = setTimeout(showHint, 1400);
+  const hintGone = setTimeout(hideHint, 12000);
 
   const canvas = $("#space"), ctx = canvas.getContext("2d");
   let W = 0, H = 0, DPR = 1;
@@ -1067,14 +1162,21 @@ function spaceScreen() {
     ctx.fillStyle = term;
     ctx.fillRect(sx - R2, sy2 - R2, R2 * 2, R2 * 2);
     ctx.globalAlpha = 1;
-    // пятна поверхности с 3D-смещением (имитация сферности: сжимаются к лимбу)
+    // Пятна поверхности. В резервном рендере нет текстуры, поэтому крупные
+    // контрастные круги читаются как мультяшные материки. Помогают два приёма:
+    // мягкий край вместо резкой заливки и общий множитель альфы, чтобы рельеф
+    // оставался намёком на поверхность, а не схемой.
     for (const s of opts.marks) {
       const px = sx + s.a * R2, py = sy2 + s.b * R2;
       const sq = 1 - Math.min(1, Math.hypot(s.a, s.b) * 0.55); // сжатие у края
       const rr = s.r * R2 * (0.6 + sq * 0.4);
       if (rr < 0.5) continue;
-      ctx.fillStyle = s.c;
-      ctx.globalAlpha = 0.55 * (0.4 + sq * 0.6);
+      const edge = ctx.createRadialGradient(px, py, rr * 0.15, px, py, rr);
+      edge.addColorStop(0, s.c);
+      edge.addColorStop(0.62, s.c);
+      edge.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = edge;
+      ctx.globalAlpha = 0.18 * (0.4 + sq * 0.6);
       ctx.beginPath(); ctx.ellipse(px, py, rr, rr * (0.7 + sq * 0.3), 0, 0, Math.PI * 2); ctx.fill();
     }
     ctx.globalAlpha = 1;
@@ -1203,10 +1305,23 @@ function spaceScreen() {
     state.last = now;
     state.t += dt;
     if (space3d) adaptQuality(dt);
+    const earthAngleBefore = state.earthAngle;
     for (const orbit of orbiting) {
       const angle = orbit.angle + state.t * orbit.speed;
       orbit.body.x = Math.cos(angle) * orbit.radius;
       orbit.body.z = Math.sin(angle) * orbit.radius;
+      if (orbit.body === EARTH) state.earthAngle = angle;
+    }
+    // Игрок выходит из взлёта в двух-трёх радиусах от Земли, а планета за
+    // двадцать секунд успевает уйти по орбите почти на три своих радиуса —
+    // на такой дистанции это выносит её из кадра и оставляет пустое небо.
+    // Пока камера ещё у Земли, мир поворачивается вместе с ней, как в местной
+    // системе отсчёта; улетел — поворот прекращается.
+    if (earthAngleBefore != null && Math.hypot(cam.pos.x - EARTH.x, cam.pos.y - EARTH.y, cam.pos.z - EARTH.z) < 40) {
+      const delta = state.earthAngle - earthAngleBefore;
+      const ca = Math.cos(delta), sa = Math.sin(delta);
+      const spin = (v) => { const x = v.x * ca - v.z * sa; v.z = v.x * sa + v.z * ca; v.x = x; };
+      spin(cam.pos); spin(cam.vel);
     }
     const moonAngle = state.t * 0.006;
     MOON.x = EARTH.x + moonOffset.x * Math.cos(moonAngle) - moonOffset.z * Math.sin(moonAngle);
@@ -1312,6 +1427,11 @@ function spaceScreen() {
     });
     const nearEl = $("#d-near");
     if (nearEl) nearEl.textContent = `${nearest.name} · ${nearest.d.toFixed(1)} R`;
+    // Один раз за полёт: куда ушла Земля и что за край системы ещё звучит.
+    if (!state.hintedLeft && state.t > 24 && Math.hypot(cam.pos.x - EARTH.x, cam.pos.y - EARTH.y, cam.pos.z - EARTH.z) > 30) {
+      state.hintedLeft = true;
+      quietSignal('Земля осталась позади. Дальше отвечает только окраина.', 9000);
+    }
 
     // события по мере полёта: теперь относительно Земли в её реальной точке орбиты
 
@@ -1389,8 +1509,13 @@ function spaceScreen() {
   };
   $("#k-scan").onclick = () => {
     if (state.modal) return;
+    RUN.listened = (RUN.listened || 0) + 1;
+    persistRun();
     const dS = Math.hypot(cam.pos.x, cam.pos.y, cam.pos.z) - SUN.r;
-    if (dS > 700 && !state.events.far) { state.events.far = true; eventSignal(); return; }
+    if (dS > 480 && !state.events.far) { state.events.far = true; eventSignal(); return; }
+    // Второе «Прислушаться» ближе к Солнцу ничего не находит, но говорит, где
+    // искать: без этого сигнал за окраиной оставался невидимым условием.
+    if (RUN.listened === 2 && dS < 480) { quietSignal('Здесь отвечает только тишина. Сигнал слышно дальше от Солнца.', 9000); AudioLayer.ping(190, 3, 0.012); return; }
     quietSignal(['Тебе больше не нужно ничего доказывать.', 'Внизу осталось всё, что казалось бесконечным.', 'Ты здесь. Этого достаточно.', 'Тишина не требует ответа.'][Math.floor(state.t / 17) % 4], 8000);
     AudioLayer.ping(220, 3, 0.012);
   };
@@ -1478,6 +1603,7 @@ function spaceScreen() {
 
   function toast(html) {
     const host = $("#overlay-host");
+    if (!host) return;
     const el = document.createElement("div");
     el.className = "overlay"; el.style.background = "transparent"; el.style.backdropFilter = "none"; el.style.pointerEvents = "none";
     el.innerHTML = `<div class="card cy" style="border-color:rgba(143,209,194,.35)"><div class="system">${html}</div></div>`;
@@ -1485,15 +1611,16 @@ function spaceScreen() {
     setTimeout(() => el.remove(), 2600);
   }
 
+
   function ending(choice = "send") {
     AudioLayer.fade(0.0001, 4);
     Haptics.notification("success");
     state.dead = true; cancelAnimationFrame(state.raf);
     flashOn();
     const meta = completeMetaRun();
-    const summary = runSummary();
     completed = true;
     persistRun("complete");
+    const summary = runSummary();
     const retained = summary.retained;
     const endingTitle = choice === "keep"
       ? (summary.choseReturn ? "Память вернулась к Земле" : retained >= 2 ? "Память не исчезла" : "Память осталась одна")
@@ -1511,7 +1638,7 @@ function spaceScreen() {
           <p class="faint" style="max-width:420px;margin:14px auto 0">${endingText}</p>
           <div class="ending-silence" id="endingSilence">не закрывай. просто побудь здесь</div>
           <div class="ending-actions" id="endingActions" hidden>
-             <div class="result-card"><span>запись · ${LIFE.name}</span><small>${LIFE.symbol || "след не определён"} · ${escapeHTML(choiceText)}</small></div>
+             <div class="result-card"><span>запись · ${escapeHTML(LIFE.name)}</span><small>${escapeHTML(LIFE.symbol || "след не определён")} · ${escapeHTML(choiceText)}</small></div>
             <div class="row center">
               <button class="button ghost" data-go="title">Выйти</button>
               <button class="button ghost" data-share>Поделиться</button>
@@ -1521,23 +1648,35 @@ function spaceScreen() {
           </div>
         </div>
       </div>`);
-    // Тишина перед действиями: сначала просто экран, кнопки — через 45 секунд.
+    /* Тишина перед действиями. Двадцать секунд, а не сорок пять: за это время
+       экран успевают прочитать, а кнопка «Выйти» уже на виду — иначе человек
+       закрывает приложение, так и не узнав, что делиться можно. */
+    const silenceMs = numberParam('silence', 20000);
     setTimeout(() => {
       const box = $("#endingActions"); const hint = $("#endingSilence");
       if (!box || !box.isConnected) return;
       box.hidden = false;
       if (hint) hint.textContent = "архив открыт";
-    }, 45000);
+    }, silenceMs);
+  }
+
+  /* Тестовый параметр для проверки финальных кнопок без ожидания:
+     ?silence=0 в адресе. В обычном прохождении его нет. */
+  function numberParam(name, fallback) {
+    const raw = new URLSearchParams(location.search).get(name);
+    const value = Number(raw);
+    return raw != null && Number.isFinite(value) && value >= 0 ? value : fallback;
   }
 
   // скрыть подсказку через 6с
-  setTimeout(() => { const h = $("#hint"); if (h) { h.style.opacity = "0"; h.style.transition = "opacity 1.2s"; } }, 6000);
+  // скрыть подсказку через 12с (и раньше — по первому касанию неба)
 
   const resetInput = () => { endLook(); endStick(); Object.keys(keyThrust).forEach(k => keyThrust[k] = false); applyKeyThrust(); };
   addEventListener('blur', resetInput);
   const onVisible = () => { if (document.hidden) { resetInput(); saveFlight(); } if (!document.hidden && !state.dead && !state.raf) { state.last = 0; state.raf = requestAnimationFrame(frame); } };
   document.addEventListener("visibilitychange", onVisible);
-  cleanupSpace = () => {
+  canvas.addEventListener("pointerdown", () => { hideHint(); clearTimeout(hintGone); });
+  cleanupSpace = () => {    clearTimeout(hintTimer); clearTimeout(hintGone);
     saveFlight();
     clearInterval(saveTimer);
     removeEventListener('pagehide', saveFlight);
@@ -1552,11 +1691,21 @@ function spaceScreen() {
   frame();
 }
 
+/* Куда ведёт ссылка в отправленном сообщении. Внутри Telegram это бот: он
+   один открывает мини-апп по кнопке, а голая ссылка на сайт в чате не
+   разворачивается в приложение. Вне Telegram — сам адрес. */
+const SHARE_BOT = 'pxaxspase_bot';
+function shareTarget() {
+  if (TG?.initData) return `https://t.me/${SHARE_BOT}?startapp=memory`;
+  return `${location.origin}${location.pathname}`;
+}
+
 // ---------- маршрутизация ----------
 let memIdx = 0;
 document.addEventListener("click", (e) => {
   if (e.target.closest('[data-sound]')) {
     AudioLayer.muted = !AudioLayer.muted;
+    try { localStorage.setItem(SOUND_KEY, AudioLayer.muted ? "off" : "on"); } catch { /* storage is optional */ }
     if (AudioLayer.muted) AudioLayer.ctx?.suspend(); else { AudioLayer.ensure(); AudioLayer.ctx?.resume(); }
     document.querySelectorAll('[data-sound]').forEach(b => { b.textContent = AudioLayer.muted ? 'Звук выключен' : 'Звук включён'; b.setAttribute('aria-pressed', String(AudioLayer.muted)); });
     return;
@@ -1565,10 +1714,11 @@ document.addEventListener("click", (e) => {
   if (e.target.closest("[data-share]")) {
     Haptics.impact("medium");
     const text = resultText();
-    const shareUrl = `${location.origin}${location.pathname}`;
-    if (TG?.openTelegramLink) TG.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(text)}`);
-    else if (navigator.share) navigator.share({ title: "Всё, что от меня ОСТАЛОСЬ", text }).catch(() => {});
-    else navigator.clipboard?.writeText(text).then(() => alert("Результат скопирован"), () => {});
+    const appUrl = shareTarget();
+    if (TG?.openTelegramLink) TG.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(appUrl)}&text=${encodeURIComponent(text)}`);
+    else if (navigator.share) navigator.share({ title: "Всё, что от меня ОСТАЛОСЬ", text, url: appUrl }).catch(() => {});
+    else if (navigator.clipboard?.writeText) navigator.clipboard.writeText(`${text}\n${appUrl}`).then(() => toast("ЗАПИСЬ СКОПИРОВАНА"), () => {});
+    else toast("ПОДЕЛИТЬСЯ НЕДОСТУПНО В ЭТОМ ОКРУЖЕНИИ");
     return;
   }
   if (e.target.closest("[data-card]")) {
@@ -1589,14 +1739,11 @@ function go(screen, opts = {}) {
   if (screen === 'title') titleScreen();
   else if (screen === 'resume') restoreRun();
   else if (screen === 'begin') {
-    if (!opts.force && hasActiveRun() && !confirm('Начать другую жизнь? Текущее воспоминание будет заменено.')) return;
+    if (!opts.force && hasActiveRun()) {
+      confirmSoft('Начать другую жизнь? Текущее воспоминание будет заменено.').then((yes) => { if (yes) go('begin', { force: true }); });
+      return;
+    }
     pickLives(); memoryScreen(0);
-  } else if (screen === 'choose') {
-    if (!opts.force && hasActiveRun() && !confirm('Незавершённая запись будет заменена новой. Продолжить?')) return;
-    pickLives(); chooseScreen();
-  } else if (screen === 'reroll') {
-    if (!opts.force && hasActiveRun() && !confirm('Незавершённая запись будет заменена новой пятёркой. Продолжить?')) return;
-    pickLives(); chooseScreen();
   } else if (screen === 'mem') { memIdx = 0; persistRun(); memoryScreen(0); }
   else if (screen === 'next') { memIdx++; persistRun(); memoryScreen(memIdx); }
   else if (screen === 'death') deathScreen();

@@ -713,11 +713,12 @@
       extra.rings = rings;
     }
 
-    // moons with their own surfaces
+    // moons with their own surfaces. The Earth has exactly one Moon: the scene
+    // already draws the real one from BODIES, and a second orbiting body next to
+    // it was a duplicate that also came with a duplicate atmosphere.
     const moonGroup = new THREE.Group();
     scene.add(moonGroup);
     const moonDefs = [
-      { parent: 'ЗЕМЛЯ', key: 'moon', r: 0.09, d: 1.9, speed: 0.4, tilt: 0.16 },
       { parent: 'МАРС', key: 'moon', r: 0.035, d: 1.0, speed: 0.9, tilt: 0.2 },
       { parent: 'ЮПИТЕР', key: 'io', r: 0.30, d: 9.4, speed: 0.62 },
       { parent: 'ЮПИТЕР', key: 'europa', r: 0.26, d: 11.6, speed: 0.48 },
